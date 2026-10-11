@@ -7,27 +7,44 @@ import { ZR_CONFIG } from './config.js';
 
 export class WhatsAppService {
   /**
-   * Generates the primary immediate WhatsApp confirmation text
+   * Generates the primary WhatsApp confirmation text with confirmed booking details
+   * Exactly matching Step F requirement
    */
   static generateConfirmationMessage(booking) {
     const name = booking.name || 'Valued Client';
-    const date = booking.date || 'Upcoming Date';
-    const time = booking.timeSlot || '45-Minute Session';
+    const email = booking.email || 'Not provided';
+    const phone = booking.phone || '';
+    const paymentId = booking.paymentId || booking.razorpay_payment_id || 'Verified';
+    const date = booking.date || 'Scheduled Date';
+    const time = booking.timeSlot || '30-Minute Consultation';
+    const timezone = booking.timezone || 'Asia/Kolkata (IST)';
+    const bookingRef = booking.id || booking.bookingRef || 'ZR-BK';
 
-    return `Hello ${name}, your consultation with ZR Interior Design has been confirmed.
+    return `Hello Z R INTERIOR DESIGN,
+I have successfully paid for my interior design consultation and booked my appointment.
 
-Date: ${date}
-Time: ${time}
-Duration: 45 minutes
+Booking Details:
+Name: ${name}
+Email: ${email}
+Phone: ${phone}
+Consultation: 30-Minute Interior Design Consultation
+Consultation Fee: ₹199
+Payment Status: Paid
+Razorpay Payment ID: ${paymentId}
+Booking Date: ${date}
+Booking Time: ${time}
+Time Zone: ${timezone}
+Calendly Event: https://calendly.com/zrinteriordesign/30min
+Booking Reference: ${bookingRef}
 
-Please keep your floor plan, property details, and requirements ready for the conversation.
+Please confirm my consultation and let me know if I should share any floor plans, site photographs, measurements, or requirements before the meeting.
 
-We look forward to speaking with you.
-— ZR Interior Design, Vadodara (Designing Since 1990)`;
+Thank you,
+${name}`;
   }
 
   /**
-   * Generates click-to-chat WhatsApp link to ZR's business number
+   * Generates click-to-chat WhatsApp link to ZR's business number (+91 78785 88859)
    */
   static getWhatsAppUrl(booking) {
     const text = this.generateConfirmationMessage(booking);
@@ -47,7 +64,7 @@ We look forward to speaking with you.
         stage: "Immediate",
         timing: "Sent immediately upon confirmation",
         title: "Official Booking Confirmation",
-        message: `Hello ${name}, your consultation with ZR Interior Design has been confirmed. Date: ${booking.date}, Time: ${booking.timeSlot}. Please keep your floor plan and property details ready.`
+        message: `Hello ${name}, your 30-minute consultation with ZR Interior Design has been confirmed. Date: ${booking.date}, Time: ${booking.timeSlot}. Please keep your floor plan and property details ready.`
       },
       {
         stage: "24 Hours Before",
@@ -71,20 +88,20 @@ We look forward to speaking with you.
   }
 
   /**
-   * Generates Google Calendar event link
+   * Generates Google Calendar event link (30 minutes)
    */
   static getGoogleCalendarUrl(booking) {
-    const title = encodeURIComponent("ZR Interior Design — 45-Minute Private Consultation");
+    const title = encodeURIComponent("ZR Interior Design — 30-Minute Private Consultation");
     const details = encodeURIComponent(
-      `45-Minute Focused Interior Consultation with ZR Interior Design.\nPrincipal Designer: Mr. Zuber Rafik Banzara\nProperty: ${booking.propertyType || 'Residential / Commercial'}\nLocation: ${booking.location || 'Vadodara'}\nScope: ${booking.budgetTier || 'Turnkey'}\nPlease have floor plans and requirements ready.`
+      `30-Minute Focused Interior Consultation with ZR Interior Design.\nPrincipal Designer: Mr. Zuber Rafik Banzara\nProperty: ${booking.propertyType || 'Residential / Commercial'}\nLocation: ${booking.location || 'Vadodara'}\nScope: ${booking.budgetTier || 'Turnkey'}\nPlease have floor plans and requirements ready.`
     );
-    const location = encodeURIComponent("ZR Interior Design Studio, Alkapuri, Vadodara");
+    const location = encodeURIComponent("ZR Interior Design Studio, 304 Raama Crest, Sunpharma Road, Vadodara");
 
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
   }
 
   /**
-   * Generates and triggers download of .ics calendar invite
+   * Generates and triggers download of .ics calendar invite (30 minutes)
    */
   static downloadIcsFile(booking) {
     const name = (booking.name || 'Client').replace(/[^\w\s-]/g, '');
@@ -94,8 +111,8 @@ PRODID:-//ZR Interior Design//Consultation Booking//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
-SUMMARY:ZR Interior Design — 45-Minute Consultation (${name})
-DESCRIPTION:Private Interior Design Consultation with ZR Interior Design Vadodara.\\nPrincipal Designer: Mr. Zuber Rafik Banzara.\\nFee: ₹199 (Adjustable against project).
+SUMMARY:ZR Interior Design — 30-Minute Consultation (${name})
+DESCRIPTION:Private 30-Minute Interior Design Consultation with ZR Interior Design Vadodara.\\nPrincipal Designer: Mr. Zuber Rafik Banzara.\\nFee: ₹199 (Adjustable against project).
 LOCATION:ZR Interior Design Studio, Vadodara
 STATUS:CONFIRMED
 END:VEVENT

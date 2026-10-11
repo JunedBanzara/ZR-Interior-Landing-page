@@ -82,13 +82,49 @@
 
 .btn-sm {
   padding: 0.75rem 1.35rem;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   letter-spacing: var(--tracking-wider);
 }
 
 .btn-lg {
-  padding: 1.25rem 2.75rem;
-  font-size: 0.8rem;
+  padding: 1.25rem 2.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.btn-xl {
+  padding: 1.35rem 3rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: 0 10px 28px rgba(142, 109, 58, 0.28);
+}
+
+.btn-xl:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(142, 109, 58, 0.38);
+}
+
+.header-book-btn {
+  padding: 0.85rem 1.65rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.hero-book-btn {
+  padding: 1.25rem 2.65rem !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  box-shadow: 0 10px 28px rgba(20, 19, 18, 0.25) !important;
+}
+
+.hero-book-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 14px 34px rgba(142, 109, 58, 0.36) !important;
 }
 
 .btn-full {
@@ -754,33 +790,5 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-}
-
-/* Instagram Integration Badge */
-.instagram-nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-  color: var(--color-text-body);
-  text-decoration: none;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xs);
-  transition: all var(--transition-fast);
-}
-
-.instagram-nav-link:hover {
-  color: var(--color-bronze);
-  border-color: var(--color-bronze);
-  background-color: rgba(143, 114, 86, 0.05);
-}
-
-.instagram-nav-link svg {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
 }
 

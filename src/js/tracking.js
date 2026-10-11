@@ -115,7 +115,7 @@ class TrackingService {
     this.trackedPurchases.add(orderId);
 
     this.track('Purchase', {
-      content_name: '45-Minute Private Consultation Verified',
+      content_name: '30-Minute Private Consultation Verified',
       value: ZR_CONFIG.consultation.price,
       currency: ZR_CONFIG.consultation.currency,
       order_id: orderId,

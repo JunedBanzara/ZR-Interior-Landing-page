@@ -90,7 +90,7 @@ export const WhatsAppServerService = {
     const dateStr = appointment?.date || 'Scheduled Date';
     const timeStr = appointment?.timeSlot || 'Scheduled Time';
 
-    const immediateMsg = `Hello ${clientName}, your consultation with ZR Interior Design has been confirmed.\n\nDate: ${dateStr}\nTime: ${timeStr}\nDuration: 45 minutes\n\nPlease keep your floor plan, property details, and requirements ready for the conversation.\n\nWe look forward to speaking with you.`;
+    const immediateMsg = `Hello ${clientName}, your consultation with ZR Interior Design has been confirmed.\n\nDate: ${dateStr}\nTime: ${timeStr}\nDuration: 30 minutes\n\nPlease keep your floor plan, property details, and requirements ready for the conversation.\n\nWe look forward to speaking with you.`;
 
     const reminder24h = `Hello ${clientName}, this is a reminder of your ZR Interior Design consultation tomorrow at ${timeStr}. Please keep your project details ready.`;
 

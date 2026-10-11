@@ -9,6 +9,11 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "sharp": "^0.35.5",
     "vite": "^5.4.14"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "razorpay": "^2.9.8"
   }
 }

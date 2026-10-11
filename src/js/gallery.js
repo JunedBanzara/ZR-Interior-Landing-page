@@ -103,7 +103,7 @@ export const REVIEWS_DATA = [
   },
   {
     id: 3,
-    quote: "The 45-minute consultation gave us complete clarity on our budget allocation and space planning. Seeing the exact materials and realistic execution schedule gave us immense confidence.",
+    quote: "The 30-minute consultation gave us complete clarity on our budget allocation and space planning. Seeing the exact materials and realistic execution schedule gave us immense confidence.",
     clientName: "Mrs. S. Desai",
     projectType: "Penthouse Residence, Sevasi",
     verifiedLocation: "Vadodara"

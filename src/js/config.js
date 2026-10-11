@@ -29,13 +29,10 @@ export const ZR_CONFIG = {
     ]
   },
 
-  instagram: {
-    handle: "@official_zrid",
-    url: "https://www.instagram.com/official_zrid/"
-  },
 
   assets: {
-    portrait: "/assets/images/FinalImages/Zuber_Rafik%20Banzara.jpeg",
+    portrait: "/assets/images/zuber%20Final%20Photo.png",
+    portraitWebp: "/assets/images/zuber-final-photo.webp",
     heroBackground: "/assets/images/FinalImages/project-apartment.jpg",
     timelineImage: "/assets/images/FinalImages/Timeline.png",
     livingRoomSketch: "/assets/images/FinalImages/Sketch%20to%20Reality_%20Modern%20Living%20Room.png",
@@ -50,7 +47,7 @@ export const ZR_CONFIG = {
     price: 199,
     currency: "INR",
     currencySymbol: "₹",
-    durationMinutes: 45,
+    durationMinutes: 30,
     isAdjustableAgainstProject: true,
     policyText: "The ₹199 consultation fee is 100% adjustable against your project if you proceed with ZR Interior Design.",
     modes: [
@@ -61,7 +58,7 @@ export const ZR_CONFIG = {
   },
 
   booking: {
-    calendlyUrl: "https://calendly.com/zrinteriordesign/45min-consultation",
+    calendlyUrl: "https://calendly.com/zrinteriordesign/30min",
     apiBase: "/api"
   },
 

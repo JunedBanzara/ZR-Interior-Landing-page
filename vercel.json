@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "routes": [
+    {
+      "src": "/api/razorpay/create-order",
+      "dest": "/api/razorpay/create-order.js"
+    },
+    {
+      "src": "/api/razorpay/verify-payment",
+      "dest": "/api/razorpay/verify-payment.js"
+    },
+    {
+      "src": "/api/razorpay/webhook",
+      "dest": "/api/razorpay/webhook.js"
+    },
+    {
+      "src": "/api/calendly/webhook",
+      "dest": "/api/calendly/webhook.js"
+    },
+    {
+      "src": "/api/confirm-appointment",
+      "dest": "/api/confirm-appointment.js"
+    },
+    {
+      "src": "/api/booking/(.*)",
+      "dest": "/api/booking/[id].js?id=$1"
+    },
+    {
+      "src": "/api/status",
+      "dest": "/api/status.js"
+    },
+    {
+      "src": "/assets/(.*)",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
+      "dest": "/assets/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

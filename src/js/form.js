@@ -92,6 +92,10 @@ export class QualificationForm {
         const el = this.form.querySelector('#phoneNumber');
         if (el) el.value = data.phone;
       }
+      if (data.email) {
+        const el = this.form.querySelector('#emailAddress');
+        if (el) el.value = data.email;
+      }
       if (data.location) {
         const el = this.form.querySelector('#projectLocation');
         if (el) el.value = data.location;
@@ -137,6 +141,14 @@ export class QualificationForm {
       this.markInvalid(phoneInput, 'Please enter a valid 10-digit WhatsApp/mobile number');
     }
 
+    // 2b. Email Address (Optional or validated if entered)
+    const emailInput = this.form.querySelector('#emailAddress');
+    const email = emailInput ? emailInput.value.trim() : '';
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      isValid = false;
+      this.markInvalid(emailInput, 'Please enter a valid email address');
+    }
+
     // 3. Project Location
     const locInput = this.form.querySelector('#projectLocation');
     const location = locInput ? locInput.value.trim() : '';
@@ -180,6 +192,7 @@ export class QualificationForm {
 
     const payload = {
       name,
+      email,
       phone: phoneRaw.length === 10 ? `+91 ${phoneRaw.slice(0, 5)} ${phoneRaw.slice(5)}` : `+${phoneRaw}`,
       phoneRaw,
       location,
