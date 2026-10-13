@@ -5,6 +5,14 @@
   "framework": "vite",
   "routes": [
     {
+      "src": "/api/create-order",
+      "dest": "/api/create-order.js"
+    },
+    {
+      "src": "/api/verify-payment",
+      "dest": "/api/verify-payment.js"
+    },
+    {
       "src": "/api/razorpay/create-order",
       "dest": "/api/razorpay/create-order.js"
     },

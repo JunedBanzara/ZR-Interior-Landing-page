@@ -27,17 +27,16 @@ export default async function handler(req, res) {
       amountInr: 199,
       amountPaise: 19900,
       currency: 'INR',
-      durationMinutes: 30
+      durationMinutes: 45
     },
     integrations: {
       razorpay: {
         configured: isRazorpayConfigured,
-        mode: RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : (isRazorpayConfigured ? 'live' : 'unconfigured'),
-        keyIdPrefix: isRazorpayConfigured ? RAZORPAY_KEY_ID.substring(0, 12) + '...' : null
+        mode: RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : (isRazorpayConfigured ? 'live' : 'unconfigured')
       },
       calendly: {
         configured: true,
-        url: 'https://calendly.com/zrinteriordesign/30min'
+        url: process.env.CALENDLY_URL || 'https://calendly.com/zrinteriordesign/45min'
       },
       whatsapp: {
         configured: true,

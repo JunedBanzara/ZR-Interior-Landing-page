@@ -409,7 +409,7 @@ export class ProjectModal {
               `).join('')}
             </ul>
             <button type="button" class="btn btn-primary btn-block" data-action="book-consultation" onclick="document.querySelector('.project-modal-backdrop')?.remove();">
-              Discuss a Similar Project — ₹199
+              BOOK MY CONSULTATION — ₹199
             </button>
           </div>
         </div>

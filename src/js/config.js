@@ -47,7 +47,7 @@ export const ZR_CONFIG = {
     price: 199,
     currency: "INR",
     currencySymbol: "₹",
-    durationMinutes: 30,
+    durationMinutes: 45,
     isAdjustableAgainstProject: true,
     policyText: "The ₹199 consultation fee is 100% adjustable against your project if you proceed with ZR Interior Design.",
     modes: [
@@ -58,7 +58,7 @@ export const ZR_CONFIG = {
   },
 
   booking: {
-    calendlyUrl: "https://calendly.com/zrinteriordesign/30min",
+    calendlyUrl: "https://calendly.com/zrinteriordesign/45min",
     apiBase: "/api"
   },
 

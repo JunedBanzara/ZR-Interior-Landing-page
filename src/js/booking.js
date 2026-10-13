@@ -1,6 +1,7 @@
 /**
  * ZR INTERIOR DESIGN — LUXURY BOOKING & INTEGRATION ENGINE
- * Connects Razorpay (₹199), Calendly (30-min consultation), WhatsApp reminders, and Meta conversions.
+ * Connects Razorpay (₹199), Calendly (45-min consultation), WhatsApp chat, and Meta conversions.
+ * Exact Sequence: Meta Ads → Landing Page → Form Submission → Razorpay Payment → Calendly Slot Booking → WhatsApp Chat
  */
 
 import { ZR_CONFIG } from './config.js';
@@ -14,12 +15,12 @@ export class BookingFunnel {
     this.leadData = null;
     this.bookingId = null;
     this.orderId = null;
+    this.paymentId = null;
     this.paymentVerified = false;
     this.appointmentData = null;
-    this.selectedDate = null;
-    this.selectedTimeSlot = null;
     this.selectedMode = "studio";
     this.calendlyRedirectUrl = null;
+    this.whatsappUrl = null;
     this.isProcessingPayment = false;
 
     this.init();
@@ -28,6 +29,125 @@ export class BookingFunnel {
   init() {
     this.renderStepIndicators();
     this.setupCalendlyListener();
+    this.restoreSessionOrUrlState();
+  }
+
+  /* ==========================================================================
+     PERSISTENT SESSION MANAGEMENT (Preserves paid state across reloads/redirects)
+     ========================================================================== */
+  saveSession() {
+    try {
+      const data = {
+        bookingId: this.bookingId,
+        paymentId: this.paymentId,
+        orderId: this.orderId,
+        leadData: this.leadData,
+        paymentVerified: this.paymentVerified,
+        appointmentData: this.appointmentData,
+        calendlyRedirectUrl: this.calendlyRedirectUrl,
+        whatsappUrl: this.whatsappUrl,
+        savedAt: new Date().toISOString()
+      };
+      localStorage.setItem('zr_consultation_session', JSON.stringify(data));
+    } catch (e) {
+      console.warn('[Session Storage Warning]:', e.message);
+    }
+  }
+
+  clearSession() {
+    try {
+      localStorage.removeItem('zr_consultation_session');
+    } catch (e) {}
+    this.bookingId = null;
+    this.paymentId = null;
+    this.orderId = null;
+    this.leadData = null;
+    this.paymentVerified = false;
+    this.appointmentData = null;
+    this.calendlyRedirectUrl = null;
+    this.whatsappUrl = null;
+    this.isProcessingPayment = false;
+    this.goToStep(1);
+  }
+
+  restoreSessionOrUrlState() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const calendlyBooked = urlParams.has('calendly_booked') || urlParams.has('event_type_name') || urlParams.has('invitee_uuid') || urlParams.has('event_type_uuid') || urlParams.has('event_start_time');
+    const urlBookingRef = urlParams.get('bookingRef') || urlParams.get('utm_campaign');
+
+    let saved = null;
+    try {
+      const raw = localStorage.getItem('zr_consultation_session');
+      if (raw) saved = JSON.parse(raw);
+    } catch (e) {}
+
+    // 1. If customer has a verified paid session
+    if (saved && saved.paymentVerified) {
+      this.bookingId = saved.bookingId || urlBookingRef;
+      this.paymentId = saved.paymentId;
+      this.orderId = saved.orderId;
+      this.leadData = saved.leadData;
+      this.paymentVerified = true;
+      this.calendlyRedirectUrl = saved.calendlyRedirectUrl;
+      this.whatsappUrl = saved.whatsappUrl;
+      this.appointmentData = saved.appointmentData;
+
+      // Check if Calendly redirect has returned with booking confirmation
+      if (calendlyBooked || this.appointmentData) {
+        if (!this.appointmentData && calendlyBooked) {
+          const startTime = urlParams.get('event_start_time');
+          this.appointmentData = {
+            date: startTime ? new Date(startTime).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Confirmed on Calendly',
+            timeSlot: startTime ? new Date(startTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '45-Minute Confirmed Slot',
+            calendlyEventUri: urlParams.get('event_uri') || null
+          };
+          this.confirmAppointment(this.appointmentData, true);
+          return;
+        }
+        this.goToStep(4);
+        return;
+      }
+
+      // Customer has verified payment but hasn't completed Calendly slot yet
+      // Resume directly at Step 3 (Never ask to pay again!)
+      this.goToStep(3);
+      return;
+    }
+
+    // 2. If returning from Calendly redirect without local storage
+    if (calendlyBooked && urlBookingRef) {
+      this.bookingId = urlBookingRef;
+      this.fetchAndRestoreBooking(urlBookingRef, urlParams);
+    }
+  }
+
+  async fetchAndRestoreBooking(bookingRef, urlParams) {
+    try {
+      const res = await fetch(`/api/booking/${encodeURIComponent(bookingRef)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.paymentStatus === 'PAID') {
+          this.paymentVerified = true;
+          this.bookingId = data.bookingRef;
+          this.leadData = {
+            name: data.name,
+            phone: data.phone,
+            email: data.email
+          };
+
+          const startTime = urlParams?.get('event_start_time');
+          this.appointmentData = {
+            date: data.appointmentDate || (startTime ? new Date(startTime).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Confirmed on Calendly'),
+            timeSlot: data.appointmentTime || (startTime ? new Date(startTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '45-Minute Confirmed Slot')
+          };
+
+          this.saveSession();
+          await this.confirmAppointment(this.appointmentData, true);
+        }
+      }
+    } catch (e) {
+      console.warn('[Restore Booking Fetch Error]:', e.message);
+    }
   }
 
   setLeadData(data) {
@@ -49,8 +169,10 @@ export class BookingFunnel {
     if (step3El) step3El.style.display = stepNumber === 3 ? 'block' : 'none';
     if (step4El) step4El.style.display = stepNumber === 4 ? 'block' : 'none';
 
-    // Scroll to container top smoothly
-    this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Smooth scroll to funnel container top
+    if (this.container) {
+      this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     if (stepNumber === 2) {
       this.renderPaymentStep();
@@ -82,7 +204,7 @@ export class BookingFunnel {
         </div>
         <div class="form-progress-step" id="progressStep4">
           <span class="step-indicator-bubble">4</span>
-          <span>Confirmed</span>
+          <span>WhatsApp Chat</span>
         </div>
       </div>
     `;
@@ -104,6 +226,7 @@ export class BookingFunnel {
 
   /* ==========================================================================
      STEP 2: PAYMENT (₹199) VIA RAZORPAY
+     Requirement: Before payment status: "Book your consultation for ₹199."
      ========================================================================== */
   renderPaymentStep() {
     const step2El = document.getElementById('funnel-step-2');
@@ -111,11 +234,16 @@ export class BookingFunnel {
 
     step2El.innerHTML = `
       <div class="form-card" style="border-top: 3px solid var(--color-bronze);">
-        <div style="margin-bottom: 2rem;">
-          <span class="eyebrow">STEP 02 OF 04 · PRIVATE CONSULTATION FEE</span>
+        <div style="margin-bottom: 1.75rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span class="eyebrow" style="margin-bottom: 0;">STEP 02 OF 04 · PRIVATE CONSULTATION FEE</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; background: #FFFDF9; border: 1px solid var(--color-bronze-light); color: var(--color-bronze); font-size: 0.8rem; font-weight: 700; border-radius: 2px;">
+              Book your consultation for ₹199.
+            </span>
+          </div>
           <h3 style="font-size: clamp(1.6rem, 2.5vw, 2.25rem); margin-bottom: 0.5rem;">Confirm Your Consultation Details</h3>
           <p style="color: var(--color-text-body); font-size: var(--text-sm);">
-            The ₹199 consultation fee secures a private 30-minute strategic review with our principal design team and filters uncommitted enquiries.
+            The ₹199 consultation fee secures a private 45-minute strategic review with our principal design team and filters uncommitted enquiries.
           </p>
         </div>
 
@@ -123,7 +251,7 @@ export class BookingFunnel {
         <div class="payment-box">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 1rem;">
             <div>
-              <strong style="display: block; font-size: var(--text-base); color: var(--color-text-main);">30-Minute Private Interior Consultation</strong>
+              <strong style="display: block; font-size: var(--text-base); color: var(--color-text-main);">45-Minute Private Interior Consultation</strong>
               <span style="font-size: var(--text-xs); color: var(--color-text-muted);">Principal Designer: Mr. Zuber Rafik Banzara & Turnkey Directors</span>
             </div>
             <span style="font-family: var(--font-serif); font-size: 1.75rem; font-weight: 600; color: var(--color-text-main);">₹199</span>
@@ -131,13 +259,13 @@ export class BookingFunnel {
 
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Client Name:</span>
-            <strong>${this.leadData.name}</strong>
+            <strong>${this.leadData?.name || ''}</strong>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">WhatsApp / Mobile:</span>
-            <span>${this.leadData.phone}</span>
+            <span>${this.leadData?.phone || ''}</span>
           </div>
-          ${this.leadData.email ? `
+          ${this.leadData?.email ? `
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Email Address:</span>
             <span>${this.leadData.email}</span>
@@ -145,21 +273,21 @@ export class BookingFunnel {
           ` : ''}
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Project Location:</span>
-            <span>${this.leadData.location}</span>
+            <span>${this.leadData?.location || ''}</span>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Property Type:</span>
-            <span>${this.leadData.propertyType}</span>
+            <span>${this.leadData?.propertyType || ''}</span>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Budget Range:</span>
-            <span>${this.leadData.budgetTier}</span>
+            <span>${this.leadData?.budgetTier || ''}</span>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Project Stage:</span>
-            <span>${this.leadData.stage || 'In Planning'}</span>
+            <span>${this.leadData?.stage || 'In Planning'}</span>
           </div>
-          ${this.leadData.description ? `
+          ${this.leadData?.description ? `
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Design Notes:</span>
             <span style="font-style: italic;">${this.leadData.description}</span>
@@ -210,6 +338,7 @@ export class BookingFunnel {
   }
 
   async initiateRazorpayPayment() {
+    // Prevent duplicate payment submissions from repeated clicks
     if (this.isProcessingPayment) return;
     this.isProcessingPayment = true;
 
@@ -226,76 +355,55 @@ export class BookingFunnel {
 
     try {
       // 1. Create order on server (Never trust frontend amount)
-      const res = await fetch('/api/razorpay/create-order', {
+      const res = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadData: this.leadData })
+        body: JSON.stringify({
+          amount: 19900,
+          currency: 'INR',
+          leadData: this.leadData
+        })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to initialize payment order');
+        throw new Error(data.error || data.message || 'Failed to initialize payment order');
       }
 
       this.bookingId = data.bookingRef || data.bookingId;
-
-      // Check if server is awaiting Razorpay API credentials
-      if (data.status === 'awaiting_credentials') {
-        this.isProcessingPayment = false;
-        if (payBtn) {
-          payBtn.disabled = false;
-          payBtn.innerHTML = `<span>Retry Razorpay Payment &rarr;</span>`;
-        }
-
-        if (statusBox) {
-          statusBox.innerHTML = `
-            <div style="padding: 1.25rem; background: #FFFDF9; border: 1px solid var(--color-bronze-light); border-left: 4px solid var(--color-bronze); border-radius: var(--radius-xs);">
-              <h4 style="margin: 0 0 0.5rem 0; font-size: var(--text-sm); color: var(--color-text-main); display: flex; align-items: center; gap: 0.5rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Razorpay Integration Ready · Awaiting API Credentials
-              </h4>
-              <p style="margin: 0 0 0.75rem 0; font-size: var(--text-xs); color: var(--color-text-body); line-height: 1.6;">
-                Pending consultation record <strong>#${this.bookingId}</strong> has been saved. To accept payments, add your Razorpay Key ID and Secret to your server environment variables.
-              </p>
-              <div style="font-size: 0.75rem; color: var(--color-text-muted); background: #F6F4EE; padding: 0.5rem 0.75rem; border-radius: 2px;">
-                Required: <code>RAZORPAY_KEY_ID=rzp_test_...</code> &nbsp;|&nbsp; Enforced Amount: <strong>₹199 INR</strong>
-              </div>
-            </div>
-          `;
-        }
-        return;
-      }
-
-      this.orderId = data.orderId;
+      this.orderId = data.order_id || data.orderId;
 
       // 2. Load official Razorpay Checkout SDK if not already present
       await this.ensureRazorpayLoaded();
 
+      const razorpayKey = data.keyId || data.key_id;
+
       // 3. Launch official Razorpay Checkout modal
       const options = {
-        key: data.keyId,
-        amount: data.amount, // Enforced 19900 paise on server
+        key: razorpayKey,
+        amount: data.amount || 19900,
         currency: data.currency || 'INR',
         name: ZR_CONFIG.brand.name,
-        description: "30-Minute Private Interior Design Consultation",
+        description: "45-Minute Private Interior Design Consultation",
         image: "assets/images/logo-zr.png",
-        order_id: data.orderId,
+        order_id: this.orderId,
         prefill: {
-          name: this.leadData.name,
-          email: this.leadData.email || '',
-          contact: this.leadData.phoneRaw || this.leadData.phone
+          name: this.leadData?.name || '',
+          email: this.leadData?.email || '',
+          contact: this.leadData?.phoneRaw || this.leadData?.phone || ''
         },
         notes: {
           bookingRef: this.bookingId,
-          propertyType: this.leadData.propertyType,
-          budgetTier: this.leadData.budgetTier
+          propertyType: this.leadData?.propertyType || 'Not specified',
+          budgetTier: this.leadData?.budgetTier || 'Not specified'
         },
         theme: {
           color: "#8F7256"
         },
         modal: {
           ondismiss: () => {
+            console.log('[Razorpay Checkout] Modal dismissed by customer');
             this.isProcessingPayment = false;
             if (payBtn) {
               payBtn.disabled = false;
@@ -303,8 +411,8 @@ export class BookingFunnel {
             }
             if (statusBox) {
               statusBox.innerHTML = `
-                <div style="padding: 0.75rem 1rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
-                  Payment checkout was closed or cancelled. Click below to reopen and complete your reservation.
+                <div style="padding: 0.85rem 1.15rem; background: #FFF9ED; border: 1px solid #ECCB97; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A531A;">
+                  <strong>Checkout Cancelled:</strong> The payment window was closed before completion. You can click below to retry your payment whenever you're ready.
                 </div>
               `;
             }
@@ -316,6 +424,7 @@ export class BookingFunnel {
       };
 
       const rzp = new window.Razorpay(options);
+
       rzp.on('payment.failed', (failResp) => {
         console.error('[Razorpay Payment Failed]', failResp.error);
         this.isProcessingPayment = false;
@@ -324,9 +433,10 @@ export class BookingFunnel {
           payBtn.innerHTML = `<span>Retry Payment (₹199) &rarr;</span>`;
         }
         if (statusBox) {
+          const reason = failResp.error?.description || failResp.error?.reason || 'Transaction declined by payment provider';
           statusBox.innerHTML = `
-            <div style="padding: 0.75rem 1rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
-              Payment failed: ${failResp.error.description || 'Transaction was declined by issuing bank'}. Please retry.
+            <div style="padding: 0.85rem 1.15rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
+              <strong>Payment Failed:</strong> ${reason}. Please verify your payment details and retry.
             </div>
           `;
         }
@@ -342,8 +452,8 @@ export class BookingFunnel {
       }
       if (statusBox) {
         statusBox.innerHTML = `
-          <div style="padding: 0.75rem 1rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
-            Error initiating payment: ${err.message}. Please check connection or retry.
+          <div style="padding: 0.85rem 1.15rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
+            <strong>Error initiating payment:</strong> ${err.message}. Please check connection or retry.
           </div>
         `;
       }
@@ -367,21 +477,27 @@ export class BookingFunnel {
 
   async handlePaymentVerification(rzpResponse) {
     const statusBox = document.getElementById('paymentStatusBox');
+    const payBtn = document.getElementById('processPaymentBtn');
+
     if (statusBox) {
       statusBox.innerHTML = `
-        <div style="padding: 0.75rem 1rem; background: #EBF4EF; border: 1px solid #A8D1BC; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #2E6B4F;">
-          Verifying payment signature with secure server...
+        <div style="padding: 0.85rem 1.15rem; background: #EBF4EF; border: 1px solid #A8D1BC; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #2E6B4F;">
+          <span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin 0.75s linear infinite; margin-right:6px; vertical-align:middle;"></span>
+          Verifying payment cryptographic signature with secure server...
         </div>
       `;
     }
 
     try {
-      // Server-Side Verification: Never trust client-side success callback alone!
-      const verifyRes = await fetch('/api/razorpay/verify-payment', {
+      // Server-Side HMAC-SHA256 Verification: Only proceed on cryptographic match
+      const verifyRes = await fetch('/api/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingRef: this.bookingId,
+          order_id: rzpResponse.razorpay_order_id,
+          payment_id: rzpResponse.razorpay_payment_id,
+          signature: rzpResponse.razorpay_signature,
           razorpay_order_id: rzpResponse.razorpay_order_id,
           razorpay_payment_id: rzpResponse.razorpay_payment_id,
           razorpay_signature: rzpResponse.razorpay_signature
@@ -398,18 +514,25 @@ export class BookingFunnel {
       this.paymentId = rzpResponse.razorpay_payment_id;
       this.calendlyRedirectUrl = verifyData.calendlyUrl;
 
+      // Save verified session in localStorage (protects against page refresh/back navigation)
+      this.saveSession();
+
       // Track Meta Purchase Conversion Event
       Tracker.trackPurchase(rzpResponse.razorpay_order_id, this.leadData);
 
-      // Transition to Step 3 (Calendly Scheduling) ONLY AFTER server confirms payment
+      // Advance to Step 3 (Calendly Scheduling) ONLY AFTER server confirms payment
       this.goToStep(3);
     } catch (err) {
       console.error('[Payment Verification Failed]', err);
       this.isProcessingPayment = false;
+      if (payBtn) {
+        payBtn.disabled = false;
+        payBtn.innerHTML = `<span>Retry Payment (₹199) &rarr;</span>`;
+      }
       if (statusBox) {
         statusBox.innerHTML = `
-          <div style="padding: 0.75rem 1rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
-            Payment verification error: ${err.message}. If funds were debited, our team will verify your transaction manually.
+          <div style="padding: 0.85rem 1.15rem; background: #FCEDED; border: 1px solid #EAA8A8; border-radius: var(--radius-xs); font-size: var(--text-xs); color: #8A2626;">
+            <strong>Verification Alert:</strong> Payment could not be verified. Please try again or contact our team.
           </div>
         `;
       }
@@ -417,7 +540,9 @@ export class BookingFunnel {
   }
 
   /* ==========================================================================
-     STEP 3: CALENDLY 30-MINUTE CONSULTATION SCHEDULER
+     STEP 3: CALENDLY 45-MINUTE CONSULTATION SCHEDULER
+     Requirement: After successful payment status:
+     "Payment successful! Please select your preferred consultation slot."
      ========================================================================== */
   renderSlotPickerStep() {
     const step3El = document.getElementById('funnel-step-3');
@@ -427,70 +552,75 @@ export class BookingFunnel {
 
     step3El.innerHTML = `
       <div class="form-card" style="border-top: 3px solid var(--color-bronze);">
-        <div style="margin-bottom: 1.75rem;">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <div style="margin-bottom: 1.5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
             <span class="eyebrow" style="margin-bottom: 0;">STEP 03 OF 04 · CALENDAR BOOKING</span>
-            <span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; background: #EBF4EF; color: #2E6B4F; font-size: 0.75rem; font-weight: 600; border-radius: 2px;">
+            <span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; background: #EBF4EF; color: #2E6B4F; font-size: 0.8rem; font-weight: 700; border-radius: 2px;">
               ✓ ₹199 Payment Verified
             </span>
           </div>
-          <h3 style="font-size: clamp(1.6rem, 2.5vw, 2.25rem); margin-bottom: 0.5rem;">Select Your 30-Minute Consultation Time</h3>
+
+          <!-- Required status message from Requirement 7 -->
+          <div style="margin: 0.5rem 0 1.25rem 0; padding: 0.95rem 1.25rem; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-xs);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+              <span style="font-size: 1.1rem; color: #166534;">🎉</span>
+              <strong style="font-size: 0.98rem; color: #166534;">Payment successful! Please select your preferred consultation slot.</strong>
+            </div>
+            <p style="margin: 0; font-size: var(--text-xs); color: #15803D;">
+              Booking Reference: <strong>#${this.bookingId || 'ZR-CONF'}</strong> · Razorpay ID: <strong>${this.paymentId || 'Verified'}</strong>
+            </p>
+          </div>
+
+          <h3 style="font-size: clamp(1.6rem, 2.5vw, 2.25rem); margin-bottom: 0.5rem;">Select Your 45-Minute Consultation Time</h3>
           <p style="color: var(--color-text-body); font-size: var(--text-sm);">
-            Choose your preferred slot with our principal design studio. Your details have been prefilled.
+            Choose your preferred date and time with our principal design studio. Your details have been prefilled.
           </p>
         </div>
 
         <!-- Consultation Format Options -->
-        <div style="margin-bottom: 1.5rem;">
-          <label class="form-label">Consultation Format</label>
-          <div class="chip-grid" id="modeSelectorGrid">
+        <div style="margin-bottom: 1.25rem;">
+          <label class="form-label" style="font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted);">Consultation Format</label>
+          <div class="chip-grid" id="modeSelectorGrid" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             ${ZR_CONFIG.consultation.modes.map((mode, i) => `
               <div class="chip-option">
                 <input type="radio" id="mode-${mode.id}" name="consultationMode" value="${mode.id}" ${i === 0 ? 'checked' : ''}>
-                <label for="mode-${mode.id}" class="chip-label">${mode.label}</label>
+                <label for="mode-${mode.id}" class="chip-label" style="font-size: var(--text-xs);">${mode.label}</label>
               </div>
             `).join('')}
           </div>
         </div>
 
-        <!-- External Calendly Link for Full Tab View -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--color-bg-base); border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+        <!-- Full Tab Redirect / External Link Option -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; padding: 0.85rem 1.15rem; background: var(--color-bg-base); border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
           <span style="font-size: var(--text-xs); color: var(--color-text-body);">
-            Having trouble viewing the calendar widget?
+            Prefer viewing the scheduler in a dedicated tab?
           </span>
-          <a href="${calendlyUrl}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" id="openCalendlyDirectBtn">
-            Open Calendly in New Tab &rarr;
+          <a href="${calendlyUrl}" class="btn btn-sm btn-outline" id="openCalendlyDirectBtn">
+            Open Calendly in Full Screen &rarr;
           </a>
         </div>
 
         <!-- Official Calendly Inline Widget Container -->
         <div style="margin-bottom: 1.5rem;">
-          <div class="calendly-inline-widget" id="calendlyInlineWidget" style="min-width:320px; height:680px; border:1px solid var(--border-subtle); border-radius:var(--radius-xs); overflow:hidden;"></div>
+          <div class="calendly-inline-widget" id="calendlyInlineWidget" style="min-width:320px; height:700px; border:1px solid var(--border-subtle); border-radius:var(--radius-xs); overflow:hidden;"></div>
         </div>
 
-        <!-- Direct Instant Slot Fallback for offline/custom environments -->
-        <div style="padding: 1.25rem; background: var(--color-bg-base); border: 1px dashed var(--border-medium); border-radius: var(--radius-xs); margin-bottom: 1.5rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <h4 style="margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-main);">
-              Alternative Direct Slot Confirmation
-            </h4>
-            <span style="font-size: var(--text-xs); color: var(--color-text-muted);">Direct Sync with Studio</span>
-          </div>
-          <p style="font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 1rem;">
-            If Calendly is loading slowly or blocked by browser shields, confirm your preferred time slot directly:
+        <!-- Reliable Post-Booking Fallback Button -->
+        <div style="padding: 1.25rem; background: #FFFDF9; border: 1px dashed var(--color-bronze-light); border-radius: var(--radius-xs); margin-bottom: 1.5rem; text-align: center;">
+          <h4 style="margin: 0 0 0.35rem 0; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-main);">
+            Already booked your slot on Calendly?
+          </h4>
+          <p style="font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 0.85rem; line-height: 1.5;">
+            If you completed your appointment booking in the calendar or in another window, click below to proceed to your verified WhatsApp chat:
           </p>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
-            <button type="button" class="btn btn-secondary direct-slot-btn" data-slot="Tomorrow · 11:30 AM" style="padding: 0.6rem; font-size: 0.78rem;">Tomorrow · 11:30 AM</button>
-            <button type="button" class="btn btn-secondary direct-slot-btn" data-slot="Tomorrow · 04:00 PM" style="padding: 0.6rem; font-size: 0.78rem;">Tomorrow · 04:00 PM</button>
-            <button type="button" class="btn btn-secondary direct-slot-btn" data-slot="In 2 Days · 02:30 PM" style="padding: 0.6rem; font-size: 0.78rem;">In 2 Days · 02:30 PM</button>
-            <button type="button" class="btn btn-secondary direct-slot-btn" data-slot="In 2 Days · 05:30 PM" style="padding: 0.6rem; font-size: 0.78rem;">In 2 Days · 05:30 PM</button>
-          </div>
+          <button type="button" class="btn btn-primary" id="alreadyBookedCalendlyBtn" style="padding: 0.85rem 1.5rem; font-size: 0.95rem; font-weight: 700;">
+            I Have Booked My Slot &rarr; Continue to WhatsApp
+          </button>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: var(--text-xs); color: var(--color-text-muted);">
           <span>Booking Reference: <strong>#${this.bookingId || 'ZR-CONF'}</strong></span>
-          <span>30-Minute Private Session · Vadodara</span>
+          <span>45-Minute Private Session · Vadodara</span>
         </div>
       </div>
     `;
@@ -498,17 +628,17 @@ export class BookingFunnel {
     // Initialize Calendly Widget
     this.mountCalendlyWidget();
 
-    // Direct slot buttons event listener
-    step3El.querySelectorAll('.direct-slot-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const slotText = btn.getAttribute('data-slot');
+    // Direct continue button if user booked in separate window or wants to proceed
+    const manualBtn = step3El.querySelector('#alreadyBookedCalendlyBtn');
+    if (manualBtn) {
+      manualBtn.addEventListener('click', () => {
         this.confirmAppointment({
-          date: slotText.split('·')[0].trim(),
-          timeSlot: slotText.split('·')[1].trim(),
+          date: 'Confirmed on Calendly',
+          timeSlot: '45-Minute Confirmed Slot',
           eventTime: new Date().toISOString()
-        });
+        }, true);
       });
-    });
+    }
   }
 
   getCalendlyPrefilledUrl() {
@@ -521,7 +651,8 @@ export class BookingFunnel {
     params.set('utm_source', 'zr_funnel');
     if (this.bookingId) params.set('utm_campaign', this.bookingId);
 
-    return `${ZR_CONFIG.booking.calendlyUrl}?${params.toString()}`;
+    const baseUrl = ZR_CONFIG.booking.calendlyUrl || 'https://calendly.com/zrinteriordesign/45min';
+    return `${baseUrl}?${params.toString()}`;
   }
 
   mountCalendlyWidget() {
@@ -543,20 +674,21 @@ export class BookingFunnel {
     const container = document.getElementById('calendlyInlineWidget');
     if (!container || !window.Calendly) return;
 
-    const calendlyUrl = ZR_CONFIG.booking.calendlyUrl;
+    const calendlyUrl = ZR_CONFIG.booking.calendlyUrl || 'https://calendly.com/zrinteriordesign/45min';
 
+    container.innerHTML = '';
     window.Calendly.initInlineWidget({
       url: calendlyUrl,
       parentElement: container,
       prefill: {
-        name: this.leadData.name,
-        email: this.leadData.email || '',
-        smsReminderNumber: this.leadData.phoneRaw || this.leadData.phone
+        name: this.leadData?.name || '',
+        email: this.leadData?.email || '',
+        smsReminderNumber: this.leadData?.phoneRaw || this.leadData?.phone || ''
       },
       utm: {
         utmCampaign: this.bookingId || 'zr_consultation',
-        utmSource: 'landing_page',
-        utmMedium: 'funnel_payment_verified'
+        utmSource: 'zr_funnel',
+        utmMedium: 'payment_verified'
       }
     });
   }
@@ -568,18 +700,29 @@ export class BookingFunnel {
         console.log('[Calendly Event Scheduled Message]:', e.data.payload);
         const payload = e.data.payload;
 
+        let scheduledDate = 'Confirmed via Calendly';
+        let scheduledTime = '45-Minute Confirmed Slot';
+
+        if (payload?.event?.start_time) {
+          try {
+            const d = new Date(payload.event.start_time);
+            scheduledDate = d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            scheduledTime = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+          } catch (err) {}
+        }
+
         await this.confirmAppointment({
           calendlyEventUri: payload?.event?.uri || null,
           calendlyInviteeUri: payload?.invitee?.uri || null,
-          date: 'Confirmed via Calendly',
-          timeSlot: '30-Minute Confirmed Slot',
-          eventTime: new Date().toISOString()
-        });
+          date: scheduledDate,
+          timeSlot: scheduledTime,
+          eventTime: payload?.event?.start_time || new Date().toISOString()
+        }, true);
       }
     });
   }
 
-  async confirmAppointment(appointmentDetails) {
+  async confirmAppointment(appointmentDetails, autoTriggerWhatsApp = true) {
     this.appointmentData = appointmentDetails;
 
     try {
@@ -606,63 +749,103 @@ export class BookingFunnel {
       if (data.whatsappUrl) {
         this.whatsappUrl = data.whatsappUrl;
       }
-
-      // Track Meta Schedule Conversion Event
-      Tracker.trackSchedule({
-        date: appointmentDetails.date,
-        timeSlot: appointmentDetails.timeSlot,
-        mode: modeSelected
-      });
-
-      // Move to Step 4: Confirmation
-      this.goToStep(4);
     } catch (err) {
       console.error('[Confirmation Error]:', err);
-      // Still display confirmation step with local details
-      this.goToStep(4);
+    }
+
+    // Save state in persistent local session
+    this.saveSession();
+
+    // Track Meta Schedule Conversion Event
+    Tracker.trackSchedule({
+      date: appointmentDetails.date,
+      timeSlot: appointmentDetails.timeSlot
+    });
+
+    // Advance to Step 4: Confirmed & WhatsApp
+    this.goToStep(4);
+
+    // Redirect the current tab to WhatsApp after confirmed booking to eliminate popup-blocking issues
+    if (autoTriggerWhatsApp) {
+      const waUrl = this.whatsappUrl || WhatsAppService.getWhatsAppUrl(this.getBookingPayload());
+      setTimeout(() => {
+        window.location.href = waUrl;
+      }, 350);
     }
   }
 
+  getBookingPayload() {
+    return {
+      id: this.bookingId,
+      bookingRef: this.bookingId,
+      name: this.leadData?.name || '',
+      phone: this.leadData?.phone || '',
+      email: this.leadData?.email || '',
+      propertyType: this.leadData?.propertyType || '',
+      location: this.leadData?.location || '',
+      budgetTier: this.leadData?.budgetTier || '',
+      paymentId: this.paymentId || 'Verified',
+      date: this.appointmentData?.date || 'Confirmed Session',
+      timeSlot: this.appointmentData?.timeSlot || '45-Minute Consultation',
+      timezone: 'Asia/Kolkata (IST)',
+      modeLabel: 'ZR Design Studio (Vadodara)'
+    };
+  }
+
   /* ==========================================================================
-     STEP 4: CONFIRMATION & WHATSAPP JOURNEY (Step F)
+     STEP 4: CONFIRMATION & WHATSAPP CHAT
+     Requirement: After booking status:
+     "Your consultation slot has been booked. Continue to WhatsApp to share your details with our team."
      ========================================================================== */
   renderConfirmationStep() {
     const step4El = document.getElementById('funnel-step-4');
     if (!step4El) return;
 
-    const bookingPayload = {
-      id: this.bookingId,
-      bookingRef: this.bookingId,
-      name: this.leadData.name,
-      phone: this.leadData.phone,
-      email: this.leadData.email,
-      paymentId: this.paymentId || 'Verified',
-      date: this.appointmentData?.date || 'Confirmed Session',
-      timeSlot: this.appointmentData?.timeSlot || '30-Minute Consultation',
-      timezone: 'Asia/Kolkata (IST)',
-      propertyType: this.leadData.propertyType,
-      location: this.leadData.location,
-      budgetTier: this.leadData.budgetTier,
-      modeLabel: 'ZR Design Studio (Vadodara)'
-    };
-
+    const bookingPayload = this.getBookingPayload();
     const whatsappUrl = this.whatsappUrl || WhatsAppService.getWhatsAppUrl(bookingPayload);
     const googleCalUrl = WhatsAppService.getGoogleCalendarUrl(bookingPayload);
     const reminders = WhatsAppService.getReminderSchedule(bookingPayload);
 
     step4El.innerHTML = `
       <div class="form-card" style="border-top: 3px solid var(--color-success); text-align: left;">
-        <div style="display: flex; align-items: flex-start; gap: 1.25rem; margin-bottom: 2rem;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--color-success-bg); color: var(--color-success); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
-            ✓
+        
+        <!-- Header & Required status message from Requirement 7 -->
+        <div style="margin-bottom: 1.75rem;">
+          <div style="display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem;">
+            <div style="width: 44px; height: 44px; border-radius: 50%; background: #EBF4EF; color: var(--color-success); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">
+              ✓
+            </div>
+            <div>
+              <span class="eyebrow" style="color: var(--color-success); margin-bottom: 0.25rem;">CONFIRMATION # ${this.bookingId || 'ZR-CONFIRMED'}</span>
+              <h3 style="font-size: clamp(1.6rem, 2.5vw, 2.25rem); margin-bottom: 0.35rem;">Consultation Confirmed</h3>
+            </div>
           </div>
-          <div>
-            <span class="eyebrow" style="color: var(--color-success); margin-bottom: 0.25rem;">CONFIRMATION # ${this.bookingId || 'ZR-CONFIRMED'}</span>
-            <h3 style="font-size: clamp(1.6rem, 2.5vw, 2.25rem); margin-bottom: 0.35rem;">Consultation Confirmed</h3>
-            <p style="color: var(--color-text-body); font-size: var(--text-sm); margin: 0;">
-              Your 30-minute consultation with Principal Designer Mr. Zuber Rafik Banzara is locked.
+
+          <div style="padding: 1rem 1.25rem; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-xs);">
+            <p style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #166534;">
+              Your consultation slot has been booked. Continue to WhatsApp to share your details with our team.
             </p>
+            <span style="font-size: var(--text-xs); color: #15803D;">
+              Your 45-minute consultation with Principal Designer Mr. Zuber Rafik Banzara is locked.
+            </span>
           </div>
+        </div>
+
+        <!-- Primary WhatsApp Next Step Action Box -->
+        <div style="padding: 1.5rem; background: #F0FDF4; border: 2px solid #22C55E; border-radius: var(--radius-xs); margin-bottom: 2rem; box-shadow: 0 4px 18px rgba(34, 197, 94, 0.12);">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.25rem;">💬</span>
+            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #166534;">
+              Final Step: Open WhatsApp Chat with Our Office
+            </h4>
+          </div>
+          <p style="margin: 0 0 1.25rem 0; font-size: var(--text-xs); color: #15803D; line-height: 1.6;">
+            Tap the button below to open WhatsApp with your prefilled appointment and payment details. Click <strong>Send</strong> in WhatsApp so our design team can prepare your architectural project brief.
+          </p>
+          <a href="${whatsappUrl}" target="_self" class="btn btn-primary" id="openWhatsAppPrimaryBtn" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; width: 100%; padding: 1.35rem 2rem; text-decoration: none; font-size: 1.1rem; font-weight: 700; background: #25D366; border-color: #25D366; box-shadow: 0 8px 24px rgba(37, 211, 102, 0.35);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.54 1.772.82 2.791.82 3.182 0 5.768-2.587 5.768-5.766.001-3.187-2.575-5.771-5.768-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.077-1.127-.061-.264-.085-.599-.2-1.031-.387-1.812-.785-3.003-2.62-3.094-2.744-.09-.124-.741-.987-.741-1.884 0-.897.469-1.339.636-1.52.167-.181.365-.226.486-.226.122 0 .243.001.349.006.111.005.26-.042.406.31.152.368.517 1.264.562 1.356.045.091.076.198.015.319-.06.122-.091.198-.182.304-.091.106-.192.237-.274.318-.091.091-.186.19-.08.372.106.182.472.779 1.013 1.261.698.622 1.287.815 1.469.906.182.091.288.076.394-.046.106-.121.455-.53.576-.712.121-.182.242-.152.407-.091.167.061 1.061.5 1.243.591.182.091.304.137.349.213.045.076.045.441-.099.846z"/></svg>
+            <span>Continue to WhatsApp Chat (+91 7878588859) &rarr;</span>
+          </a>
         </div>
 
         <!-- Appointment Summary Box -->
@@ -671,27 +854,37 @@ export class BookingFunnel {
             <span style="color: var(--color-text-muted);">Client Name:</span>
             <strong>${bookingPayload.name}</strong>
           </div>
-          ${bookingPayload.email ? `
-          <div class="payment-summary-row">
-            <span style="color: var(--color-text-muted);">Email:</span>
-            <span>${bookingPayload.email}</span>
-          </div>
-          ` : ''}
+          ${bookingPayload.phone ? `
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Phone:</span>
             <span>${bookingPayload.phone}</span>
           </div>
+          ` : ''}
+          ${bookingPayload.propertyType ? `
+          <div class="payment-summary-row">
+            <span style="color: var(--color-text-muted);">Property Type:</span>
+            <span>${bookingPayload.propertyType}</span>
+          </div>
+          ` : ''}
+          ${bookingPayload.location ? `
+          <div class="payment-summary-row">
+            <span style="color: var(--color-text-muted);">Project Location:</span>
+            <span>${bookingPayload.location}</span>
+          </div>
+          ` : ''}
+          ${bookingPayload.budgetTier ? `
+          <div class="payment-summary-row">
+            <span style="color: var(--color-text-muted);">Budget:</span>
+            <span>${bookingPayload.budgetTier}</span>
+          </div>
+          ` : ''}
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Appointment Slot:</span>
             <span style="color: var(--color-bronze); font-weight: 600;">${bookingPayload.date} · ${bookingPayload.timeSlot}</span>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Duration:</span>
-            <span>30 Minutes Dedicated Session</span>
-          </div>
-          <div class="payment-summary-row">
-            <span style="color: var(--color-text-muted);">Property Scope:</span>
-            <span>${bookingPayload.propertyType} (${bookingPayload.location})</span>
+            <span>45 Minutes Dedicated Session</span>
           </div>
           <div class="payment-summary-row">
             <span style="color: var(--color-text-muted);">Fee Paid:</span>
@@ -699,24 +892,10 @@ export class BookingFunnel {
           </div>
           ${bookingPayload.paymentId ? `
           <div class="payment-summary-row">
-            <span style="color: var(--color-text-muted);">Razorpay Payment ID:</span>
-            <span style="font-family: monospace; font-size: var(--text-xs);">${bookingPayload.paymentId}</span>
+            <span style="color: var(--color-text-muted);">Payment Reference:</span>
+            <span style="font-family: monospace; font-size: var(--text-xs); font-weight: 600;">${bookingPayload.paymentId}</span>
           </div>
           ` : ''}
-        </div>
-
-        <!-- Primary WhatsApp Next Step Action Box -->
-        <div style="padding: 1.5rem; background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-xs); margin-bottom: 2rem;">
-          <h4 style="margin: 0 0 0.5rem 0; font-size: var(--text-sm); color: #166534; display: flex; align-items: center; gap: 0.5rem;">
-            <span>💬</span> Next Step: Send Confirmed Details to WhatsApp Studio
-          </h4>
-          <p style="margin: 0 0 1rem 0; font-size: var(--text-xs); color: #15803D; line-height: 1.6;">
-            Tap the button below to open WhatsApp with your prefilled consultation details. Review and tap <strong>Send</strong> so our design team can prepare your session brief.
-          </p>
-          <a href="${whatsappUrl}" target="_blank" rel="noopener" class="btn btn-primary" id="openWhatsAppPrimaryBtn" style="display: flex; align-items: center; justify-content: center; gap: 0.65rem; width: 100%; padding: 1.15rem 1.75rem; text-decoration: none; font-size: 1rem;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.54 1.772.82 2.791.82 3.182 0 5.768-2.587 5.768-5.766.001-3.187-2.575-5.771-5.768-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.077-1.127-.061-.264-.085-.599-.2-1.031-.387-1.812-.785-3.003-2.62-3.094-2.744-.09-.124-.741-.987-.741-1.884 0-.897.469-1.339.636-1.52.167-.181.365-.226.486-.226.122 0 .243.001.349.006.111.005.26-.042.406.31.152.368.517 1.264.562 1.356.045.091.076.198.015.319-.06.122-.091.198-.182.304-.091.106-.192.237-.274.318-.091.091-.186.19-.08.372.106.182.472.779 1.013 1.261.698.622 1.287.815 1.469.906.182.091.288.076.394-.046.106-.121.455-.53.576-.712.121-.182.242-.152.407-.091.167.061 1.061.5 1.243.591.182.091.304.137.349.213.045.076.045.441-.099.846z"/></svg>
-            <span>Open WhatsApp Chat with Booking Details (+91 7878588859)</span>
-          </a>
         </div>
 
         <!-- WhatsApp Automation & Reminders Track -->
@@ -746,12 +925,15 @@ export class BookingFunnel {
         </div>
 
         <!-- Calendar Actions -->
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 2rem;">
-          <a href="${googleCalUrl}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 1rem 1.25rem; text-decoration: none;">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+          <a href="${googleCalUrl}" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 0.85rem 1.25rem; text-decoration: none; font-size: var(--text-xs);">
             Add to Google Calendar
           </a>
-          <button type="button" class="btn btn-secondary" id="downloadIcsBtn" style="padding: 1rem 1.25rem;">
+          <button type="button" class="btn btn-secondary" id="downloadIcsBtn" style="padding: 0.85rem 1.25rem; font-size: var(--text-xs);">
             Download .ICS File
+          </button>
+          <button type="button" class="btn btn-outline" id="startNewBookingBtn" style="padding: 0.85rem 1.25rem; font-size: var(--text-xs); margin-left: auto;">
+            New Consultation Booking
           </button>
         </div>
 
@@ -764,8 +946,15 @@ export class BookingFunnel {
     `;
 
     // Download iCS event listener
-    step4El.querySelector('#downloadIcsBtn').addEventListener('click', () => {
+    step4El.querySelector('#downloadIcsBtn')?.addEventListener('click', () => {
       WhatsAppService.downloadIcsFile(bookingPayload);
+    });
+
+    // Start new booking event listener
+    step4El.querySelector('#startNewBookingBtn')?.addEventListener('click', () => {
+      if (confirm('Start a new consultation enquiry? Your current confirmed details will be cleared from this browser session.')) {
+        this.clearSession();
+      }
     });
   }
 }

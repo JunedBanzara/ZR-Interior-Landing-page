@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 const CONSULTATION_FEE_INR = 199;
-const CONSULTATION_DURATION = '30 minutes';
-const CALENDLY_URL = 'https://calendly.com/zrinteriordesign/30min';
+const CONSULTATION_DURATION = '45 minutes';
+const CALENDLY_URL = 'https://calendly.com/zrinteriordesign/45min';
 const WHATSAPP_PHONE = '917878588859';
 
 export default function ConsultationBooking({ onSuccess }) {
@@ -28,7 +28,7 @@ export default function ConsultationBooking({ onSuccess }) {
   const [calendlyUrl, setCalendlyUrl] = useState(CALENDLY_URL);
   const [appointment, setAppointment] = useState({
     date: 'Confirmed via Calendly',
-    timeSlot: '30-Minute Confirmed Slot',
+    timeSlot: '45-Minute Confirmed Slot',
     timezone: 'Asia/Kolkata'
   });
   const [whatsappUrl, setWhatsappUrl] = useState('');
@@ -64,40 +64,37 @@ export default function ConsultationBooking({ onSuccess }) {
 
     try {
       // 1. Create order on serverless API
-      const res = await fetch('/api/razorpay/create-order', {
+      const res = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadData: formData })
+        body: JSON.stringify({
+          amount: 19900,
+          currency: 'INR',
+          leadData: formData
+        })
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to create payment order');
+        throw new Error(data.error || data.message || 'Failed to create payment order');
       }
 
       setBookingRef(data.bookingRef);
-
-      // Handle awaiting credentials in initial development
-      if (data.status === 'awaiting_credentials') {
-        setErrorMessage(
-          `Consultation record #${data.bookingRef} saved. Razorpay credentials awaiting configuration in environment variables.`
-        );
-        setLoading(false);
-        return;
-      }
 
       // Ensure Razorpay SDK is loaded
       if (!window.Razorpay) {
         await loadRazorpayScript();
       }
 
+      const razorpayKey = data.keyId || data.key_id;
+
       const options = {
-        key: data.keyId,
-        amount: data.amount, // Enforced 19900 paise on server
+        key: razorpayKey,
+        amount: data.amount || 19900,
         currency: data.currency || 'INR',
         name: 'ZR Interior Design',
-        description: '30-Minute Interior Design Consultation',
-        order_id: data.orderId,
+        description: '45-Minute Interior Design Consultation',
+        order_id: data.order_id || data.orderId,
         prefill: {
           name: formData.name,
           email: formData.email,
@@ -125,7 +122,7 @@ export default function ConsultationBooking({ onSuccess }) {
       const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', (failResp) => {
         setLoading(false);
-        setErrorMessage(`Payment failed: ${failResp.error.description || 'Transaction declined'}`);
+        setErrorMessage(`Payment failed: ${failResp.error?.description || 'Transaction declined'}`);
       });
 
       rzp.open();
@@ -138,11 +135,14 @@ export default function ConsultationBooking({ onSuccess }) {
   // Step 2b: Server-Side Signature Verification (Never trust frontend callback alone)
   const verifyPaymentOnServer = async (rzpResponse, activeBookingRef) => {
     try {
-      const res = await fetch('/api/razorpay/verify-payment', {
+      const res = await fetch('/api/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingRef: activeBookingRef,
+          order_id: rzpResponse.razorpay_order_id,
+          payment_id: rzpResponse.razorpay_payment_id,
+          signature: rzpResponse.razorpay_signature,
           razorpay_order_id: rzpResponse.razorpay_order_id,
           razorpay_payment_id: rzpResponse.razorpay_payment_id,
           razorpay_signature: rzpResponse.razorpay_signature
@@ -183,11 +183,20 @@ export default function ConsultationBooking({ onSuccess }) {
     const handleCalendlyMessage = async (e) => {
       if (e.data && e.data.event === 'calendly.event_scheduled') {
         const payload = e.data.payload;
+        let scheduledDate = 'Confirmed via Calendly';
+        let scheduledTime = '45-Minute Confirmed Slot';
+        if (payload?.event?.start_time) {
+          try {
+            const d = new Date(payload.event.start_time);
+            scheduledDate = d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            scheduledTime = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+          } catch (err) {}
+        }
         await confirmAppointmentOnServer({
           calendlyEventUri: payload?.event?.uri,
           calendlyInviteeUri: payload?.invitee?.uri,
-          date: 'Confirmed via Calendly',
-          timeSlot: '30-Minute Confirmed Slot'
+          date: scheduledDate,
+          timeSlot: scheduledTime
         });
       }
     };
@@ -210,9 +219,11 @@ export default function ConsultationBooking({ onSuccess }) {
       });
 
       const data = await res.json();
-      if (data.whatsappUrl) {
-        setWhatsappUrl(data.whatsappUrl);
+      let targetWaUrl = data.whatsappUrl;
+      if (!targetWaUrl) {
+        targetWaUrl = getStepFWhatsAppUrl();
       }
+      setWhatsappUrl(targetWaUrl);
       setAppointment({
         date: details.date,
         timeSlot: details.timeSlot,
@@ -220,6 +231,11 @@ export default function ConsultationBooking({ onSuccess }) {
       });
       setStep(4); // Advance to confirmed screen
       if (onSuccess) onSuccess(data);
+
+      // Redirect current tab to WhatsApp to eliminate popup blocking
+      setTimeout(() => {
+        window.location.href = targetWaUrl;
+      }, 350);
     } catch (err) {
       setStep(4);
     }
@@ -229,28 +245,23 @@ export default function ConsultationBooking({ onSuccess }) {
   const getStepFWhatsAppUrl = () => {
     if (whatsappUrl) return whatsappUrl;
 
-    const message = `Hello Z R INTERIOR DESIGN,
-I have successfully paid for my interior design consultation and booked my appointment.
+    const lines = [
+      'Hello ZR Interior Design Team,',
+      'I have successfully paid for my interior design consultation and booked my appointment.'
+    ];
 
-Booking Details:
-Name: ${formData.name || 'Client'}
-Email: ${formData.email || 'Not provided'}
-Phone: ${formData.phone || ''}
-Consultation: 30-Minute Interior Design Consultation
-Consultation Fee: ₹199
-Payment Status: Paid
-Razorpay Payment ID: ${paymentId || 'Verified'}
-Booking Date: ${appointment.date}
-Booking Time: ${appointment.timeSlot}
-Time Zone: ${appointment.timezone}
-Calendly Event: ${CALENDLY_URL}
-Booking Reference: ${bookingRef || 'ZR-BK'}
+    if (formData.name) lines.push(`Name: ${formData.name}`);
+    if (formData.phone) lines.push(`Phone: ${formData.phone}`);
+    if (formData.propertyType) lines.push(`Property Type: ${formData.propertyType}`);
+    if (formData.location) lines.push(`Project Location: ${formData.location}`);
+    if (appointment.date) lines.push(`Appointment Date: ${appointment.date}`);
+    if (appointment.timeSlot) lines.push(`Appointment Time: ${appointment.timeSlot}`);
+    if (paymentId) lines.push(`Payment Reference: ${paymentId}`);
 
-Please confirm my consultation and let me know if I should share any floor plans, site photographs, measurements, or requirements before the meeting.
+    lines.push('Please confirm my consultation.');
+    lines.push('Thank you.');
 
-Thank you,
-${formData.name || 'Client'}`;
-
+    const message = lines.join('\n');
     return `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
   };
 
@@ -281,7 +292,7 @@ ${formData.name || 'Client'}`;
           <div style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>Book Your Interior Design Consultation</h3>
             <p style={{ color: 'var(--color-text-body, #666)', fontSize: '0.9rem' }}>
-              30-minute consultation · Fee: ₹199 (100% adjustable against your project contract)
+              45-minute consultation · Fee: ₹199 (100% adjustable against your project contract)
             </p>
           </div>
 
@@ -442,7 +453,7 @@ ${formData.name || 'Client'}`;
       {step === 3 && (
         <div className="calendly-step-card" style={{ padding: '1.5rem', background: '#FFF', border: '1px solid #E5E5E5', borderRadius: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.35rem' }}>Select Your 30-Minute Slot</h3>
+            <h3 style={{ margin: 0, fontSize: '1.35rem' }}>Select Your 45-Minute Slot</h3>
             <span style={{ background: '#EBF4EF', color: '#2E6B4F', padding: '0.25rem 0.6rem', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
               ✓ Payment Verified
             </span>
@@ -456,7 +467,7 @@ ${formData.name || 'Client'}`;
             width="100%"
             height="650"
             frameBorder="0"
-            title="Calendly 30-Minute Consultation Scheduler"
+            title="Calendly 45-Minute Consultation Scheduler"
             style={{ borderRadius: 6, border: '1px solid #E5E5E5' }}
           ></iframe>
 
@@ -500,8 +511,7 @@ ${formData.name || 'Client'}`;
 
           <a
             href={getStepFWhatsAppUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
+            target="_self"
             style={{
               display: 'block',
               textAlign: 'center',

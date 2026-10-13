@@ -1,40 +1,35 @@
 import { DB } from '../server/db.js';
 
-const WHATSAPP_NUMBER = '917878588859';
-const CALENDLY_EVENT_URL = 'https://calendly.com/zrinteriordesign/30min';
+const WHATSAPP_NUMBER = process.env.WHATSAPP_BUSINESS_PHONE || '917878588859';
+const CALENDLY_EVENT_URL = process.env.CALENDLY_URL || 'https://calendly.com/zrinteriordesign/45min';
 
 export function buildWhatsAppUrl(booking) {
-  const customerName = booking.customer_name || 'Valued Client';
-  const customerEmail = booking.customer_email || 'Not provided';
-  const customerPhone = booking.customer_phone || '';
-  const paymentId = booking.razorpay_payment_id || 'Verified';
-  const bookingDate = booking.appointment_date || 'Upcoming Date';
-  const bookingTime = booking.appointment_time || '30-Minute Consultation';
-  const timeZone = booking.timezone || 'Asia/Kolkata (IST)';
-  const bookingRef = booking.booking_reference || 'ZR-BK';
+  const customerName = booking.customer_name || booking.name || '';
+  const customerPhone = booking.customer_phone_raw || booking.customer_phone || booking.phone || '';
+  const propertyType = booking.property_type || booking.propertyType || '';
+  const projectLocation = booking.project_location || booking.location || '';
+  const budget = booking.budget_tier || booking.budgetTier || '';
+  const bookingDate = booking.appointment_date || booking.date || '';
+  const bookingTime = booking.appointment_time || booking.timeSlot || booking.time || '';
+  const paymentId = booking.razorpay_payment_id || booking.payment_id || booking.paymentId || 'Verified';
 
-  const message = `Hello Z R INTERIOR DESIGN,
-I have successfully paid for my interior design consultation and booked my appointment.
+  const lines = [
+    'Hello ZR Interior Design Team,',
+    'I have successfully paid for my interior design consultation and booked my appointment.'
+  ];
 
-Booking Details:
-Name: ${customerName}
-Email: ${customerEmail}
-Phone: ${customerPhone}
-Consultation: 30-Minute Interior Design Consultation
-Consultation Fee: ₹199
-Payment Status: Paid
-Razorpay Payment ID: ${paymentId}
-Booking Date: ${bookingDate}
-Booking Time: ${bookingTime}
-Time Zone: ${timeZone}
-Calendly Event: ${CALENDLY_EVENT_URL}
-Booking Reference: ${bookingRef}
+  if (customerName) lines.push(`Name: ${customerName}`);
+  if (customerPhone) lines.push(`Phone: ${customerPhone}`);
+  if (propertyType) lines.push(`Property Type: ${propertyType}`);
+  if (projectLocation) lines.push(`Project Location: ${projectLocation}`);
+  if (bookingDate) lines.push(`Appointment Date: ${bookingDate}`);
+  if (bookingTime) lines.push(`Appointment Time: ${bookingTime}`);
+  if (paymentId) lines.push(`Payment Reference: ${paymentId}`);
 
-Please confirm my consultation and let me know if I should share any floor plans, site photographs, measurements, or requirements before the meeting.
+  lines.push('Please confirm my consultation.');
+  lines.push('Thank you.');
 
-Thank you,
-${customerName}`;
-
+  const message = lines.join('\n');
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
 }
 
@@ -101,7 +96,7 @@ export default async function handler(req, res) {
     }
 
     const appointmentDate = date || 'Confirmed via Calendly';
-    const appointmentTime = time || timeSlot || '30-Minute Confirmed Slot';
+    const appointmentTime = time || timeSlot || '45-Minute Confirmed Slot';
     const activeTimezone = timezone || 'Asia/Kolkata';
 
     const updatedBooking = await DB.updateAppointmentConfirmed(ref, {
@@ -129,7 +124,7 @@ export default async function handler(req, res) {
         date: appointmentDate,
         time: appointmentTime,
         timezone: activeTimezone,
-        duration: '30 minutes'
+        duration: '45 minutes'
       },
       whatsappUrl
     });

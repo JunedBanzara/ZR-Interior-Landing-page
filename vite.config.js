@@ -6,9 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   for (const key of Object.keys(env)) {
-    if (!process.env[key]) {
-      process.env[key] = env[key];
-    }
+    process.env[key] = env[key];
   }
 
   return {

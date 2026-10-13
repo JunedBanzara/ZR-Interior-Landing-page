@@ -57,7 +57,7 @@
   --text-4xl: 2.25rem;    /* 36px */
   --text-5xl: 3rem;       /* 48px */
   --text-6xl: 3.75rem;    /* 60px */
-  --text-hero: clamp(2.5rem, 5vw, 4.75rem);
+  --text-hero: clamp(1.85rem, 6.2vw, 4.25rem);
 
   /* Line Heights */
   --leading-tight: 1.1;
@@ -88,7 +88,7 @@
   --container-max: 1280px;
   --container-narrow: 880px;
   --container-wide: 1440px;
-  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --gutter: clamp(1rem, 3.5vw, 2.5rem);
 
   /* Diffused Architectural Shadows */
   --shadow-sm: 0 2px 8px rgba(20, 19, 18, 0.04);

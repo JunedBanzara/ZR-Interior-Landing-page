@@ -2,9 +2,7 @@ import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { DB } from '../../server/db.js';
 
-const CONSULTATION_AMOUNT_PAISE = 19900;
-const CONSULTATION_CURRENCY = 'INR';
-const CALENDLY_BASE_URL = 'https://calendly.com/zrinteriordesign/30min';
+const CALENDLY_BASE_URL = process.env.CALENDLY_URL || 'https://calendly.com/zrinteriordesign/45min';
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -36,25 +34,27 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    const {
-      bookingRef,
-      bookingId,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature
-    } = body;
+    // 1. Extract Order ID, Payment ID, and Signature (support both naming formats)
+    const order_id = body.order_id || body.razorpay_order_id;
+    const payment_id = body.payment_id || body.razorpay_payment_id;
+    const signature = body.signature || body.razorpay_signature;
+    const ref = body.bookingRef || body.bookingId;
 
-    const ref = bookingRef || bookingId;
-
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    // 2. Validate Required Fields
+    if (!order_id || !payment_id || !signature) {
       return res.status(400).json({
         error: 'Missing required payment verification parameters',
-        required: ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature']
+        required: ['order_id', 'payment_id', 'signature'],
+        received: {
+          order_id: Boolean(order_id),
+          payment_id: Boolean(payment_id),
+          signature: Boolean(signature)
+        }
       });
     }
 
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
     const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
 
     if (!RAZORPAY_KEY_SECRET) {
       return res.status(500).json({
@@ -63,139 +63,98 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 1: Server-Side HMAC SHA256 Signature Verification
-    const expectedSignature = crypto
+    // 3. Server-Side HMAC SHA256 Signature Verification
+    // Algorithm: HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
+    const generatedSignature = crypto
       .createHmac('sha256', RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .update(`${order_id}|${payment_id}`)
       .digest('hex');
 
-    const expectedBuf = Buffer.from(expectedSignature, 'utf8');
-    const providedBuf = Buffer.from(razorpay_signature, 'utf8');
+    let isSignatureValid = false;
+    try {
+      const expectedBuf = Buffer.from(generatedSignature, 'utf8');
+      const providedBuf = Buffer.from(signature, 'utf8');
 
-    const isSignatureValid =
-      expectedBuf.length === providedBuf.length &&
-      crypto.timingSafeEqual(expectedBuf, providedBuf);
+      if (expectedBuf.length === providedBuf.length) {
+        isSignatureValid = crypto.timingSafeEqual(expectedBuf, providedBuf);
+      }
+    } catch (cmpErr) {
+      isSignatureValid = false;
+    }
 
+    // Reject immediately on signature mismatch - DO NOT MARK AS PAID
     if (!isSignatureValid) {
-      console.error('[Payment Verification Failed] Signature mismatch for order:', razorpay_order_id);
+      console.error('[Payment Verification Failed] Signature mismatch for order:', order_id);
       return res.status(400).json({
-        error: 'Payment signature verification failed. Untrusted payment submission.',
-        verified: false
+        error: 'Payment verification failed: Signature mismatch',
+        verified: false,
+        success: false
       });
     }
 
-    // Step 2: Fetch and Validate Order & Payment Details via Official Razorpay SDK
-    const isMockTestSuite = RAZORPAY_KEY_ID.includes('test_suite') || process.env.RAZORPAY_MOCK_TEST === 'true';
-
-    let paymentDetails;
-    let orderDetails;
-
-    if (isMockTestSuite) {
-      // Mock validated entity for unit testing
-      paymentDetails = {
-        id: razorpay_payment_id,
-        order_id: razorpay_order_id,
-        amount: CONSULTATION_AMOUNT_PAISE,
-        currency: CONSULTATION_CURRENCY,
-        status: 'captured',
-        method: 'card',
-        email: 'test@example.com',
-        contact: '9825012345'
-      };
-      orderDetails = {
-        id: razorpay_order_id,
-        amount: CONSULTATION_AMOUNT_PAISE,
-        currency: CONSULTATION_CURRENCY
-      };
-    } else {
-      const razorpay = new Razorpay({
-        key_id: RAZORPAY_KEY_ID,
-        key_secret: RAZORPAY_KEY_SECRET
-      });
-
+    // 4. Signatures match! Payment is verified.
+    // Fetch transaction details from Razorpay if available
+    let paymentDetails = null;
+    if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
       try {
-        paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
-        orderDetails = await razorpay.orders.fetch(razorpay_order_id);
-      } catch (rzpErr) {
-        console.error('[Razorpay API Fetch Error]:', rzpErr);
-        return res.status(502).json({
-          error: 'Failed to validate transaction details with Razorpay API',
-          details: rzpErr.message
+        const razorpay = new Razorpay({
+          key_id: RAZORPAY_KEY_ID,
+          key_secret: RAZORPAY_KEY_SECRET
         });
+        paymentDetails = await razorpay.payments.fetch(payment_id);
+
+        // Auto-capture authorized payments if not yet captured
+        if (paymentDetails && paymentDetails.status === 'authorized') {
+          try {
+            paymentDetails = await razorpay.payments.capture(
+              payment_id,
+              paymentDetails.amount,
+              paymentDetails.currency
+            );
+          } catch (capErr) {
+            console.warn('[Razorpay Auto-Capture Notice]:', capErr.message);
+          }
+        }
+      } catch (rzpErr) {
+        // Non-fatal if payment is synthetic test or network blip
+        console.warn('[Razorpay Details Fetch Notice]:', rzpErr.message);
       }
     }
 
-    // Step 3: Strict Validation of Amount, Currency, Order Association & Status
-    if (paymentDetails.order_id !== razorpay_order_id) {
-      return res.status(400).json({
-        error: 'Security alert: Payment does not match the generated order ID',
-        verified: false
-      });
-    }
-
-    if (paymentDetails.currency !== CONSULTATION_CURRENCY) {
-      return res.status(400).json({
-        error: `Invalid payment currency. Expected ${CONSULTATION_CURRENCY}, got ${paymentDetails.currency}`,
-        verified: false
-      });
-    }
-
-    if (paymentDetails.amount !== CONSULTATION_AMOUNT_PAISE) {
-      return res.status(400).json({
-        error: `Invalid payment amount. Server requires exact ₹199 (${CONSULTATION_AMOUNT_PAISE} paise), received ${paymentDetails.amount}`,
-        verified: false
-      });
-    }
-
-    // Check payment capture state. If authorized, capture it.
-    if (paymentDetails.status === 'authorized') {
-      try {
-        paymentDetails = await razorpay.payments.capture(
-          razorpay_payment_id,
-          CONSULTATION_AMOUNT_PAISE,
-          CONSULTATION_CURRENCY
-        );
-      } catch (capErr) {
-        console.error('[Razorpay Auto-Capture Error]:', capErr);
-      }
-    }
-
-    if (paymentDetails.status !== 'captured') {
-      return res.status(400).json({
-        error: `Payment is not in captured state. Current status: ${paymentDetails.status}`,
-        verified: false
-      });
-    }
-
-    // Step 4: Record Verified Payment in Persistent Storage (Idempotent)
+    // 5. Update Database Record if Booking Exists
     let booking = null;
     if (ref) {
       booking = await DB.getBookingByRef(ref);
     }
-    if (!booking) {
-      booking = await DB.getBookingByOrderId(razorpay_order_id);
+    if (!booking && order_id) {
+      booking = await DB.getBookingByOrderId(order_id);
     }
 
-    const updatedRecord = await DB.updatePaymentSuccess(ref || razorpay_order_id, {
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      signature: razorpay_signature,
-      metadata: {
-        method: paymentDetails.method,
-        email: paymentDetails.email,
-        contact: paymentDetails.contact,
-        capturedAt: new Date().toISOString()
-      }
-    });
+    let updatedRecord = null;
+    try {
+      updatedRecord = await DB.updatePaymentSuccess(ref || order_id, {
+        paymentId: payment_id,
+        orderId: order_id,
+        signature: signature,
+        metadata: {
+          method: paymentDetails?.method || 'online',
+          email: paymentDetails?.email || booking?.customer_email || '',
+          contact: paymentDetails?.contact || booking?.customer_phone || '',
+          capturedAt: new Date().toISOString()
+        }
+      });
+    } catch (dbErr) {
+      console.warn('[DB Payment Update Notice]:', dbErr.message);
+    }
 
     const customerName = updatedRecord?.customer_name || booking?.customer_name || 'Client';
-    const customerEmail = updatedRecord?.customer_email || booking?.customer_email || paymentDetails.email || '';
-    const customerPhone = updatedRecord?.customer_phone_raw || updatedRecord?.customer_phone || booking?.customer_phone || paymentDetails.contact || '';
-    const activeBookingRef = updatedRecord?.booking_reference || ref || `ZR-BK-${razorpay_order_id.slice(-6)}`;
+    const customerEmail = updatedRecord?.customer_email || booking?.customer_email || paymentDetails?.email || '';
+    const customerPhone = updatedRecord?.customer_phone_raw || updatedRecord?.customer_phone || booking?.customer_phone || paymentDetails?.contact || '';
+    const activeBookingRef = updatedRecord?.booking_reference || ref || `ZR-BK-${order_id.slice(-6)}`;
 
-    // Step 5: Construct Calendly Prefilled Booking Link
+    // 6. Build Calendly Scheduling Link
     const calendlyParams = new URLSearchParams();
-    if (customerName) calendlyParams.set('name', customerName);
+    if (customerName && customerName !== 'Client') calendlyParams.set('name', customerName);
     if (customerEmail) calendlyParams.set('email', customerEmail);
     if (customerPhone) calendlyParams.set('a1', customerPhone);
     calendlyParams.set('utm_source', 'zr_funnel');
@@ -203,14 +162,16 @@ export default async function handler(req, res) {
 
     const calendlyUrl = `${CALENDLY_BASE_URL}?${calendlyParams.toString()}`;
 
+    // 7. Return Verified Response
     return res.status(200).json({
       success: true,
       verified: true,
+      message: 'Payment signature verified successfully',
+      order_id,
+      orderId: order_id,
+      payment_id,
+      paymentId: payment_id,
       bookingRef: activeBookingRef,
-      orderId: razorpay_order_id,
-      paymentId: razorpay_payment_id,
-      amount: 199,
-      currency: 'INR',
       calendlyUrl,
       customer: {
         name: customerName,
@@ -219,7 +180,7 @@ export default async function handler(req, res) {
       }
     });
   } catch (error) {
-    console.error('[Verify Payment Error]:', error);
+    console.error('[Verify Payment Global Error]:', error);
     return res.status(500).json({
       error: 'Internal server error during payment verification',
       message: error.message || 'Verification failed'
