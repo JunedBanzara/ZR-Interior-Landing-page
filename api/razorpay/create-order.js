@@ -58,8 +58,8 @@ export default async function handler(req, res) {
     const clientPhone = (customer && customer.phone) ? customer.phone.trim() : '';
     const clientEmail = (customer && customer.email) ? customer.email.trim() : '';
 
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
-    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY || process.env.RZP_KEY_ID || '';
+    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_SECRET || process.env.RZP_KEY_SECRET || '';
 
     if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
       return res.status(500).json({

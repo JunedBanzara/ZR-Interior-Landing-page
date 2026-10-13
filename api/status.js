@@ -10,13 +10,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
-  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY || process.env.RZP_KEY_ID || '';
+  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_SECRET || process.env.RZP_KEY_SECRET || '';
   const isRazorpayConfigured = Boolean(
     RAZORPAY_KEY_ID &&
     RAZORPAY_KEY_SECRET &&
     !RAZORPAY_KEY_ID.includes('placeholder') &&
     !RAZORPAY_KEY_SECRET.includes('placeholder')
+  );
+
+  const detectedRazorpayKeys = Object.keys(process.env).filter(k => 
+    k.toUpperCase().includes('RAZOR') || 
+    k.toUpperCase().includes('RZP')
   );
 
   return res.status(200).json({
@@ -32,7 +37,12 @@ export default async function handler(req, res) {
     integrations: {
       razorpay: {
         configured: isRazorpayConfigured,
-        mode: RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : (isRazorpayConfigured ? 'live' : 'unconfigured')
+        mode: RAZORPAY_KEY_ID.startsWith('rzp_test_') ? 'test' : (isRazorpayConfigured ? 'live' : 'unconfigured'),
+        envDiagnostics: {
+          has_RAZORPAY_KEY_ID: Boolean(process.env.RAZORPAY_KEY_ID),
+          has_RAZORPAY_KEY_SECRET: Boolean(process.env.RAZORPAY_KEY_SECRET),
+          detectedRazorpayEnvVarNames: detectedRazorpayKeys
+        }
       },
       calendly: {
         configured: true,

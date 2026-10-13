@@ -53,8 +53,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || '';
+    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_SECRET || process.env.RZP_KEY_SECRET || '';
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY || process.env.RZP_KEY_ID || '';
 
     if (!RAZORPAY_KEY_SECRET) {
       return res.status(500).json({
