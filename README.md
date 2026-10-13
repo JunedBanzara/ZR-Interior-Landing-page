@@ -17,7 +17,7 @@
 [![Calendly](https://img.shields.io/badge/Calendly-Scheduling-006BFF?style=for-the-badge&logo=calendly&logoColor=white)](https://calendly.com/)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Cloud_API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://business.whatsapp.com/)
 
-[**Explore Live Project**](https://zr-interior-design.vercel.app) • [**Book 30-Min Consultation**](#-4-step-consultation-funnel) • [**API Reference**](#-api-specification) • [**Setup Guide**](#-installation--local-setup)
+[**Explore Live Project**](https://zr-interior-design.vercel.app) • [**Book 45-Min Consultation**](#-4-step-consultation-funnel) • [**API Reference**](#-api-specification) • [**Setup Guide**](#-installation--local-setup)
 
 </div>
 
@@ -161,7 +161,7 @@ Offers 3 convenient consultation modes:
 1. **ZR Design Studio (Vadodara)** — 304 Raama Crest, Sunpharma Road (Includes tactile material palette review).
 2. **On-Site Property Evaluation (Vadodara)** — Direct walkthrough at client's villa, apartment, or plot.
 3. **Private Video Call (Google Meet)** — HD screen-sharing and floor plan review.
-- Automated scheduling integration via **Calendly 30-Min Event** with built-in fallback slot picker.
+- Automated scheduling integration via **Calendly 45-Min Event** with built-in fallback slot picker.
 
 ### Step 4: Instant VIP Confirmation & Dispatch
 - Generates a unique tracking reference (e.g. `ZR-BK-892104-X9KL2`).
@@ -201,7 +201,7 @@ graph LR
 | **Database** | [Supabase](https://supabase.com/) (PostgreSQL) | Managed cloud PostgreSQL with RLS, triggers, and indices |
 | **Local Storage Fallback**| JSON File System (`data/`) | Zero-config automatic local file persistence for development |
 | **Payment Gateway** | [Razorpay](https://razorpay.com/) SDK | Server-enforced orders, checkout modal, HMAC verification |
-| **Scheduling Engine** | [Calendly](https://calendly.com/) | 30-minute event embed, webhooks, and calendar dispatch |
+| **Scheduling Engine** | [Calendly](https://calendly.com/) | 45-minute event embed, webhooks, and calendar dispatch |
 | **Messaging & CRM** | WhatsApp Cloud API & Click-to-Chat | Automated confirmation messages and instant WhatsApp link |
 | **Tracking & Analytics** | Meta Pixel & Conversions API | Custom events: `Lead`, `InitiateCheckout`, `Purchase` |
 
@@ -448,7 +448,7 @@ cp .env.example .env
 | `RAZORPAY_KEY_SECRET` | Yes | `xxxxxxxxxxxxxxxx` | Razorpay Key Secret |
 | `RAZORPAY_WEBHOOK_SECRET` | Optional | `xxxxxxxxxxxxxxxx` | Secret configured in Razorpay Webhooks |
 | `CONSULTATION_AMOUNT_PAISE`| Optional | `19900` | Consultation fee in paise (₹199 INR) |
-| `CALENDLY_URL` | Optional | `https://calendly.com/zrinteriordesign/30min` | Calendly 30-min event type link |
+| `CALENDLY_URL` | Optional | `https://calendly.com/zrinteriordesign/45min` | Calendly 45-min event type link |
 | `CALENDLY_WEBHOOK_SIGNING_KEY` | Optional | `xxxxxxxxxxxxxxxx` | Calendly Webhook verification key |
 | `WHATSAPP_BUSINESS_PHONE` | Optional | `917878588859` | Direct WhatsApp reception phone number |
 | `WHATSAPP_PHONE_NUMBER_ID`| Optional | `1029384756` | Meta Cloud API Phone Number ID |

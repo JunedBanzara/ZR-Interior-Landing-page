@@ -409,7 +409,7 @@ export default function ConsultationBooking({ onSuccess }) {
           <div style={{ background: '#FAF8F5', padding: '1rem', borderRadius: 4, marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span>Consultation:</span>
-              <strong>30-Minute Consultation</strong>
+              <strong>45-Minute Consultation</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span>Client Name:</span>
