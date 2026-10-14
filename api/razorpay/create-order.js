@@ -114,10 +114,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5. Save pending booking record if client info is present
-    if (clientName && clientName !== 'Client') {
-      try {
-        await DB.createBooking({
+    // 5. Link with existing lead or save pending lead record
+    const leadId = body.leadId || customer?.leadId;
+    try {
+      if (leadId || body.bookingRef) {
+        await DB.linkRazorpayOrder(leadId || body.bookingRef, order.id);
+      } else if (clientName && clientName !== 'Client') {
+        await DB.createLead({
           bookingRef,
           name: clientName,
           email: clientEmail,
@@ -131,11 +134,11 @@ export default async function handler(req, res) {
           amountPaise: amount,
           currency,
           orderId: order.id,
-          paymentStatus: 'PENDING'
+          paymentStatus: 'pending'
         });
-      } catch (dbErr) {
-        console.warn('[DB Booking Save Warning]:', dbErr.message);
       }
+    } catch (dbErr) {
+      console.warn('[DB Lead Link/Save Warning]:', dbErr.message);
     }
 
     // 6. Return response with order_id, amount, currency (plus helpers)

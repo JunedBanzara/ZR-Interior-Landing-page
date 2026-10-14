@@ -13,6 +13,7 @@ export class BookingFunnel {
     this.container = containerEl;
     this.currentStep = 1;
     this.leadData = null;
+    this.leadId = null;
     this.bookingId = null;
     this.orderId = null;
     this.paymentId = null;
@@ -39,6 +40,7 @@ export class BookingFunnel {
     try {
       const data = {
         bookingId: this.bookingId,
+        leadId: this.leadId,
         paymentId: this.paymentId,
         orderId: this.orderId,
         leadData: this.leadData,
@@ -59,6 +61,7 @@ export class BookingFunnel {
       localStorage.removeItem('zr_consultation_session');
     } catch (e) {}
     this.bookingId = null;
+    this.leadId = null;
     this.paymentId = null;
     this.orderId = null;
     this.leadData = null;
@@ -84,6 +87,7 @@ export class BookingFunnel {
     // 1. If customer has a verified paid session
     if (saved && saved.paymentVerified) {
       this.bookingId = saved.bookingId || urlBookingRef;
+      this.leadId = saved.leadId || null;
       this.paymentId = saved.paymentId;
       this.orderId = saved.orderId;
       this.leadData = saved.leadData;
@@ -150,8 +154,11 @@ export class BookingFunnel {
     }
   }
 
-  setLeadData(data) {
+  setLeadData(data, leadId = null, bookingRef = null) {
     this.leadData = data;
+    if (leadId) this.leadId = leadId;
+    if (bookingRef) this.bookingId = bookingRef;
+    this.saveSession();
     this.goToStep(2);
   }
 
@@ -361,6 +368,8 @@ export class BookingFunnel {
         body: JSON.stringify({
           amount: 19900,
           currency: 'INR',
+          leadId: this.leadId,
+          bookingRef: this.bookingId,
           leadData: this.leadData
         })
       });

@@ -53,7 +53,12 @@ export default async function handler(req, res) {
         businessPhone: '+91 78785 88859'
       },
       database: {
-        type: DB.isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local Fallback Storage'
+        type: DB.isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local Fallback Storage',
+        configured: DB.isSupabaseConfigured(),
+        envDiagnostics: {
+          has_SUPABASE_URL: Boolean(process.env.SUPABASE_URL),
+          has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)
+        }
       }
     }
   });

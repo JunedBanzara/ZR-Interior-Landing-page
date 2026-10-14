@@ -41,6 +41,46 @@
       "dest": "/api/status.js"
     },
     {
+      "src": "/api/leads/capture",
+      "dest": "/api/leads/capture.js"
+    },
+    {
+      "src": "/api/leads/reconcile-abandoned",
+      "dest": "/api/leads/reconcile-abandoned.js"
+    },
+    {
+      "src": "/api/admin/login",
+      "dest": "/api/admin/login.js"
+    },
+    {
+      "src": "/api/admin/logout",
+      "dest": "/api/admin/logout.js"
+    },
+    {
+      "src": "/api/admin/session",
+      "dest": "/api/admin/session.js"
+    },
+    {
+      "src": "/api/admin/leads",
+      "dest": "/api/admin/leads.js"
+    },
+    {
+      "src": "/api/admin/lead-action",
+      "dest": "/api/admin/lead-action.js"
+    },
+    {
+      "src": "/api/admin/export",
+      "dest": "/api/admin/export.js"
+    },
+    {
+      "src": "/admin/leads",
+      "dest": "/admin/index.html"
+    },
+    {
+      "src": "/admin",
+      "dest": "/admin/index.html"
+    },
+    {
       "src": "/assets/(.*)",
       "headers": {
         "cache-control": "public, max-age=31536000, immutable"

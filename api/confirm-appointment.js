@@ -63,18 +63,8 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    const {
-      bookingRef,
-      bookingId,
-      date,
-      time,
-      timeSlot,
-      timezone,
-      calendlyEventUri,
-      calendlyInviteeUri
-    } = body;
-
-    const ref = bookingRef || bookingId;
+    const appointmentData = body.appointmentData || {};
+    const ref = body.bookingRef || body.bookingId || appointmentData.bookingRef;
 
     if (!ref) {
       return res.status(400).json({ error: 'Missing booking reference' });
@@ -86,25 +76,26 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Booking record not found' });
     }
 
-    // Step G Requirement: Never mark an appointment as booked solely because payment succeeded.
-    // Also ensure payment has actually succeeded before scheduling!
-    if (booking.payment_status !== 'PAID') {
+    // Ensure payment has actually succeeded before scheduling
+    if ((booking.payment_status || '').toUpperCase() !== 'PAID') {
       return res.status(403).json({
         error: 'Cannot confirm appointment: Payment has not been verified yet',
         paymentStatus: booking.payment_status
       });
     }
 
-    const appointmentDate = date || 'Confirmed via Calendly';
-    const appointmentTime = time || timeSlot || '45-Minute Confirmed Slot';
-    const activeTimezone = timezone || 'Asia/Kolkata';
+    const appointmentDate = body.date || appointmentData.date || 'Confirmed via Calendly';
+    const appointmentTime = body.time || body.timeSlot || appointmentData.timeSlot || appointmentData.time || '45-Minute Confirmed Slot';
+    const activeTimezone = body.timezone || appointmentData.timezone || 'Asia/Kolkata';
+    const activeEventUri = body.calendlyEventUri || appointmentData.calendlyEventUri;
+    const activeInviteeUri = body.calendlyInviteeUri || appointmentData.calendlyInviteeUri;
 
     const updatedBooking = await DB.updateAppointmentConfirmed(ref, {
       date: appointmentDate,
       time: appointmentTime,
       timezone: activeTimezone,
-      calendlyEventUri,
-      calendlyInviteeUri
+      calendlyEventUri: activeEventUri,
+      calendlyInviteeUri: activeInviteeUri
     });
 
     const finalBooking = updatedBooking || {

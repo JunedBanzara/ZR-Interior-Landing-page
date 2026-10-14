@@ -207,16 +207,85 @@ export class QualificationForm {
     return payload;
   }
 
-  handleSubmit(e) {
+  async handleSubmit(e) {
     e.preventDefault();
+    if (this.isSubmitting) return;
+
     const data = this.validate();
     if (!data) return;
 
-    // Fire Meta Lead event
-    Tracker.trackLead(data);
+    const submitBtn = this.form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.innerHTML : 'BOOK MY CONSULTATION — ₹199';
 
-    if (typeof this.onSubmitSuccess === 'function') {
-      this.onSubmitSuccess(data);
+    // Show inline saving status
+    this.isSubmitting = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `
+        <span class="spinner" style="display:inline-block; width:16px; height:16px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin 0.75s linear infinite; margin-right:8px; vertical-align:middle;"></span>
+        Saving Consultation Details...
+      `;
+    }
+
+    // Capture marketing UTM parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const trackingPayload = {
+      ...data,
+      utm_source: urlParams.get('utm_source') || '',
+      utm_medium: urlParams.get('utm_medium') || '',
+      utm_campaign: urlParams.get('utm_campaign') || '',
+      utm_content: urlParams.get('utm_content') || '',
+      utm_term: urlParams.get('utm_term') || '',
+      fbclid: urlParams.get('fbclid') || '',
+      gclid: urlParams.get('gclid') || ''
+    };
+
+    try {
+      // 1. Persist lead in Supabase BEFORE moving to payment step
+      const res = await fetch('/api/leads/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trackingPayload)
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || result.message || 'Failed to save consultation details');
+      }
+
+      // Clear any previous error box
+      const existingError = this.form.querySelector('.form-global-error');
+      if (existingError) existingError.style.display = 'none';
+
+      // Fire Meta Lead event
+      Tracker.trackLead(data);
+
+      const leadId = result.leadId || result.id;
+      const bookingRef = result.bookingRef;
+
+      if (typeof this.onSubmitSuccess === 'function') {
+        this.onSubmitSuccess(data, leadId, bookingRef);
+      }
+    } catch (err) {
+      console.error('[Lead Save Error]:', err);
+      // Show non-destructive inline error (preserves all customer inputs)
+      let errorBox = this.form.querySelector('.form-global-error');
+      if (!errorBox) {
+        errorBox = document.createElement('div');
+        errorBox.className = 'form-global-error';
+        errorBox.style.cssText = 'background: #FFF5F5; border: 1px solid #FEB2B2; color: #C53030; padding: 0.85rem 1rem; border-radius: 4px; margin-top: 1rem; font-size: 0.9rem; text-align: center;';
+        const submitRow = this.form.querySelector('.form-submit-row');
+        if (submitRow) submitRow.parentNode.insertBefore(errorBox, submitRow);
+      }
+      errorBox.innerHTML = `⚠️ Unable to securely save your booking details: <strong>${err.message}</strong>. Your information is preserved—please tap to retry.`;
+      errorBox.style.display = 'block';
+    } finally {
+      this.isSubmitting = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
     }
   }
 }

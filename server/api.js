@@ -5,6 +5,14 @@ import calendlyWebhookHandler from '../api/calendly/webhook.js';
 import confirmAppointmentHandler from '../api/confirm-appointment.js';
 import bookingHandler from '../api/booking/[id].js';
 import statusHandler from '../api/status.js';
+import leadCaptureHandler from '../api/leads/capture.js';
+import reconcileAbandonedHandler from '../api/leads/reconcile-abandoned.js';
+import adminLoginHandler from '../api/admin/login.js';
+import adminLogoutHandler from '../api/admin/logout.js';
+import adminSessionHandler from '../api/admin/session.js';
+import adminLeadsHandler from '../api/admin/leads.js';
+import adminLeadActionHandler from '../api/admin/lead-action.js';
+import adminExportHandler from '../api/admin/export.js';
 
 export async function handleApiRequest(req, res) {
   // Ensure res has Vercel-like helper methods in Node/Vite middleware
@@ -43,38 +51,75 @@ export async function handleApiRequest(req, res) {
     }
   }
 
+  // Parse query string into req.query
+  if (!req.query) {
+    req.query = Object.fromEntries(url.searchParams.entries());
+  }
+
   try {
     // 1. Status Check
     if (pathname === '/api/status') {
       return await statusHandler(req, res);
     }
 
-    // 2. Razorpay Order Creation (Supports both standard and namespaced paths)
+    // 2. Lead Capture (Before Payment)
+    if (pathname === '/api/leads/capture' || pathname === '/api/leads') {
+      return await leadCaptureHandler(req, res);
+    }
+
+    // 3. Reconcile Abandoned Leads
+    if (pathname === '/api/leads/reconcile-abandoned') {
+      return await reconcileAbandonedHandler(req, res);
+    }
+
+    // 4. Admin Authentication
+    if (pathname === '/api/admin/login') {
+      return await adminLoginHandler(req, res);
+    }
+    if (pathname === '/api/admin/logout') {
+      return await adminLogoutHandler(req, res);
+    }
+    if (pathname === '/api/admin/session') {
+      return await adminSessionHandler(req, res);
+    }
+
+    // 5. Admin Leads Management & Actions
+    if (pathname === '/api/admin/leads') {
+      return await adminLeadsHandler(req, res);
+    }
+    if (pathname === '/api/admin/lead-action') {
+      return await adminLeadActionHandler(req, res);
+    }
+    if (pathname === '/api/admin/export') {
+      return await adminExportHandler(req, res);
+    }
+
+    // 6. Razorpay Order Creation (Supports both standard and namespaced paths)
     if (pathname === '/api/razorpay/create-order' || pathname === '/api/create-order') {
       return await createOrderHandler(req, res);
     }
 
-    // 3. Razorpay Signature & Amount Verification
+    // 7. Razorpay Signature & Amount Verification
     if (pathname === '/api/razorpay/verify-payment' || pathname === '/api/verify-payment') {
       return await verifyPaymentHandler(req, res);
     }
 
-    // 4. Razorpay Webhook
+    // 8. Razorpay Webhook
     if (pathname === '/api/razorpay/webhook') {
       return await webhookHandler(req, res);
     }
 
-    // 5. Calendly Webhook
+    // 9. Calendly Webhook
     if (pathname === '/api/calendly/webhook') {
       return await calendlyWebhookHandler(req, res);
     }
 
-    // 6. Confirm Appointment
+    // 10. Confirm Appointment
     if (pathname === '/api/confirm-appointment') {
       return await confirmAppointmentHandler(req, res);
     }
 
-    // 7. Booking Details
+    // 11. Booking Details
     if (pathname.startsWith('/api/booking/')) {
       const id = pathname.replace('/api/booking/', '');
       req.query = { id };

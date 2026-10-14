@@ -1,5 +1,14 @@
 import { defineConfig, loadEnv } from 'vite';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { handleApiRequest } from './server/api.js';
+
+let __dirname = '';
+try {
+  __dirname = path.dirname(fileURLToPath(import.meta.url));
+} catch (e) {
+  __dirname = process.cwd();
+}
 
 export default defineConfig(({ mode }) => {
   // Load environment variables from .env
@@ -10,6 +19,14 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          admin: path.resolve(__dirname, 'admin/index.html')
+        }
+      }
+    },
     server: {
       port: 5173,
       open: false,

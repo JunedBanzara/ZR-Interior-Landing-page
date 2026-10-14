@@ -97,6 +97,21 @@ export default async function handler(req, res) {
           }
         });
       }
+    } else if (event === 'payment.failed') {
+      const paymentEntity = payload.payload?.payment?.entity;
+      const orderId = paymentEntity?.order_id;
+      const errorDescription = paymentEntity?.error_description || paymentEntity?.error_reason || 'Payment failed';
+      if (orderId) {
+        console.log(`[Webhook Payment Failed] Order: ${orderId}, Reason: ${errorDescription}`);
+        await DB.updatePaymentFailed(orderId, {
+          reason: errorDescription,
+          metadata: {
+            webhookEvent: event,
+            errorCode: paymentEntity?.error_code,
+            errorDescription
+          }
+        });
+      }
     }
 
     // Always acknowledge 200 OK to Razorpay

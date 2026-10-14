@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 5. Initialize Qualification Form (7 Fields)
   const qualificationFormEl = document.getElementById('projectQualificationForm');
   if (qualificationFormEl && bookingFunnel) {
-    new QualificationForm(qualificationFormEl, (leadData) => {
-      bookingFunnel.setLeadData(leadData);
+    new QualificationForm(qualificationFormEl, (leadData, leadId, bookingRef) => {
+      bookingFunnel.setLeadData(leadData, leadId, bookingRef);
     });
   }
 
