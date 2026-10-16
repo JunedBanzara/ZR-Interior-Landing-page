@@ -140,7 +140,7 @@ BEGIN
       updated_at,
       COALESCE(booking_reference, 'ZR-LEAD-' || substr(md5(random()::text), 1, 8))
     FROM consultation_bookings
-    ON CONFLICT (lead_id) DO NOTHING;
+    ON CONFLICT DO NOTHING;
   END IF;
 END $$;
 
@@ -186,7 +186,28 @@ CREATE INDEX IF NOT EXISTS idx_lead_activity_lead_id ON lead_activity_logs(lead_
 CREATE INDEX IF NOT EXISTS idx_lead_activity_created_at ON lead_activity_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
 
--- 6. ROW LEVEL SECURITY (RLS) POLICIES
+-- 6. AUTOMATED UPDATED_AT TRIGGER
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_leads_updated_at ON leads;
+CREATE TRIGGER trigger_leads_updated_at
+BEFORE UPDATE ON leads
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+DROP TRIGGER IF EXISTS trigger_admin_users_updated_at ON admin_users;
+CREATE TRIGGER trigger_admin_users_updated_at
+BEFORE UPDATE ON admin_users
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- 7. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lead_activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;

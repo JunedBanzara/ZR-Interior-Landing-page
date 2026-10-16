@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { DB } from '../../server/db.js';
+import { DB } from '../../db.js';
 
 const CONSULTATION_AMOUNT_PAISE = 19900;
 const CONSULTATION_CURRENCY = 'INR';

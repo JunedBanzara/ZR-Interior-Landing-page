@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { DB } from '../../server/db.js';
+import { DB } from '../../db.js';
 
 function formatCalendlyDate(isoString, timezone = 'Asia/Kolkata') {
   if (!isoString) return 'Confirmed Date';

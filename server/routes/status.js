@@ -1,4 +1,4 @@
-import { DB } from '../server/db.js';
+import { DB } from '../db.js';
 
 export default async function handler(req, res) {
   // CORS Headers
@@ -23,6 +23,12 @@ export default async function handler(req, res) {
     k.toUpperCase().includes('RAZOR') || 
     k.toUpperCase().includes('RZP')
   );
+
+  const detectedSupabaseKeys = Object.keys(process.env).filter(k => 
+    k.toUpperCase().includes('SUPABASE')
+  );
+
+  const dbConnectionTest = await DB.testSupabaseConnection();
 
   return res.status(200).json({
     status: 'online',
@@ -55,9 +61,16 @@ export default async function handler(req, res) {
       database: {
         type: DB.isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local Fallback Storage',
         configured: DB.isSupabaseConfigured(),
+        connected: dbConnectionTest.connected,
+        projectUrl: DB.getProjectUrl(),
+        projectReference: 'udetsffqshoxanyviyht',
+        leadsCount: dbConnectionTest.leadsCount ?? null,
+        statusMessage: dbConnectionTest.message || dbConnectionTest.error || (DB.isSupabaseConfigured() ? 'Connected' : 'Operating on local fallback storage until keys are configured'),
         envDiagnostics: {
           has_SUPABASE_URL: Boolean(process.env.SUPABASE_URL),
-          has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)
+          has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_REPLACEMENT_SECRET_KEY),
+          has_SUPABASE_ANON_KEY: Boolean(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY),
+          detectedSupabaseEnvVarNames: detectedSupabaseKeys
         }
       }
     }

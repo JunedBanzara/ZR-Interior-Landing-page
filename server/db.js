@@ -68,15 +68,36 @@ function readLocalLogs() { return readLocal(LOGS_FILE, memoryLogs); }
 function writeLocalLogs(data) { writeLocal(LOGS_FILE, data, (d) => { memoryLogs = d; }); }
 
 // Supabase client instance (server-side only with service_role key)
+let _cachedSupabase = null;
+let _lastSupabaseInitKey = null;
+
+export const SUPABASE_PROJECT_REF = 'udetsffqshoxanyviyht';
+export const SUPABASE_DEFAULT_URL = 'https://udetsffqshoxanyviyht.supabase.co';
+
 function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  const rawUrl = process.env.SUPABASE_URL || SUPABASE_DEFAULT_URL;
+  const supabaseUrl = (rawUrl || '').trim().replace(/\/+$/, '');
+  const supabaseKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_REPLACEMENT_SECRET_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
 
   if (supabaseUrl && supabaseKey && !supabaseUrl.includes('placeholder') && !supabaseKey.includes('placeholder')) {
+    const initSignature = `${supabaseUrl}:${supabaseKey.slice(0, 5)}`;
+    if (_cachedSupabase && _lastSupabaseInitKey === initSignature) {
+      return _cachedSupabase;
+    }
     try {
-      return createClient(supabaseUrl, supabaseKey, {
+      _cachedSupabase = createClient(supabaseUrl, supabaseKey, {
         auth: { persistSession: false }
       });
+      _lastSupabaseInitKey = initSignature;
+      return _cachedSupabase;
     } catch (err) {
       console.warn('[DB] Supabase init warning:', err.message);
     }
@@ -93,6 +114,56 @@ function generateId(prefix = 'ZR-LEAD') {
 export const DB = {
   isSupabaseConfigured() {
     return Boolean(getSupabaseClient());
+  },
+
+  getProjectUrl() {
+    return (process.env.SUPABASE_URL || SUPABASE_DEFAULT_URL).trim().replace(/\/+$/, '');
+  },
+
+  async testSupabaseConnection() {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return {
+        connected: false,
+        configured: false,
+        projectUrl: this.getProjectUrl(),
+        message: 'Supabase client is not configured. Missing secret key in environment variables.'
+      };
+    }
+
+    try {
+      const { data, count, error } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true });
+
+      if (error) {
+        return {
+          connected: false,
+          configured: true,
+          projectUrl: this.getProjectUrl(),
+          error: error.message,
+          code: error.code,
+          hint: error.code === '42P01' 
+            ? 'Table "leads" does not exist yet in Supabase. Please execute supabase/migration_001_leads_and_admin.sql in your Supabase SQL Editor.'
+            : error.message
+        };
+      }
+
+      return {
+        connected: true,
+        configured: true,
+        projectUrl: this.getProjectUrl(),
+        leadsCount: count ?? 0,
+        message: 'Successfully connected to Supabase table "leads".'
+      };
+    } catch (err) {
+      return {
+        connected: false,
+        configured: true,
+        projectUrl: this.getProjectUrl(),
+        error: err.message
+      };
+    }
   },
 
   getSupabase() {

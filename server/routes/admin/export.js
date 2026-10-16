@@ -1,5 +1,5 @@
-import { verifyAdminSession } from '../../server/auth.js';
-import { DB } from '../../server/db.js';
+import { verifyAdminSession } from '../../auth.js';
+import { DB } from '../../db.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');

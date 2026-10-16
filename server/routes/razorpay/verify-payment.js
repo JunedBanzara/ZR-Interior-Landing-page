@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
-import { DB } from '../../server/db.js';
+import { DB } from '../../db.js';
 
 const CALENDLY_BASE_URL = process.env.CALENDLY_URL || 'https://calendly.com/zrinteriordesign/45min';
 

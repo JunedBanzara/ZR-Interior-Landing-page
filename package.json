@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/server.js",
+    "test:leads": "node scratch/test-leads-and-supabase.js",
+    "test:funnel": "node scratch/test-full-funnel.js",
+    "db:migrate-local": "node scripts/migrate-local-to-supabase.js"
   },
   "devDependencies": {
     "sharp": "^0.35.5",

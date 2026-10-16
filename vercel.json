@@ -5,79 +5,27 @@
   "framework": "vite",
   "routes": [
     {
-      "src": "/api/create-order",
-      "dest": "/api/create-order.js"
+      "src": "/api/(.*)",
+      "dest": "/api/index.js?_path=$1"
     },
     {
-      "src": "/api/verify-payment",
-      "dest": "/api/verify-payment.js"
-    },
-    {
-      "src": "/api/razorpay/create-order",
-      "dest": "/api/razorpay/create-order.js"
-    },
-    {
-      "src": "/api/razorpay/verify-payment",
-      "dest": "/api/razorpay/verify-payment.js"
-    },
-    {
-      "src": "/api/razorpay/webhook",
-      "dest": "/api/razorpay/webhook.js"
-    },
-    {
-      "src": "/api/calendly/webhook",
-      "dest": "/api/calendly/webhook.js"
-    },
-    {
-      "src": "/api/confirm-appointment",
-      "dest": "/api/confirm-appointment.js"
-    },
-    {
-      "src": "/api/booking/(.*)",
-      "dest": "/api/booking/[id].js?id=$1"
-    },
-    {
-      "src": "/api/status",
-      "dest": "/api/status.js"
-    },
-    {
-      "src": "/api/leads/capture",
-      "dest": "/api/leads/capture.js"
-    },
-    {
-      "src": "/api/leads/reconcile-abandoned",
-      "dest": "/api/leads/reconcile-abandoned.js"
-    },
-    {
-      "src": "/api/admin/login",
-      "dest": "/api/admin/login.js"
-    },
-    {
-      "src": "/api/admin/logout",
-      "dest": "/api/admin/logout.js"
-    },
-    {
-      "src": "/api/admin/session",
-      "dest": "/api/admin/session.js"
-    },
-    {
-      "src": "/api/admin/leads",
-      "dest": "/api/admin/leads.js"
-    },
-    {
-      "src": "/api/admin/lead-action",
-      "dest": "/api/admin/lead-action.js"
-    },
-    {
-      "src": "/api/admin/export",
-      "dest": "/api/admin/export.js"
+      "src": "/api",
+      "dest": "/api/index.js?_path=status"
     },
     {
       "src": "/admin/leads",
       "dest": "/admin/index.html"
     },
     {
-      "src": "/admin",
+      "src": "/admin.html",
+      "dest": "/admin/index.html"
+    },
+    {
+      "src": "/admin/?",
+      "dest": "/admin/index.html"
+    },
+    {
+      "src": "/admin/(.*)",
       "dest": "/admin/index.html"
     },
     {

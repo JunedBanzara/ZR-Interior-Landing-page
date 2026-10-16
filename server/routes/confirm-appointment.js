@@ -1,4 +1,4 @@
-import { DB } from '../server/db.js';
+import { DB } from '../db.js';
 
 const WHATSAPP_NUMBER = process.env.WHATSAPP_BUSINESS_PHONE || '917878588859';
 const CALENDLY_EVENT_URL = process.env.CALENDLY_URL || 'https://calendly.com/zrinteriordesign/45min';

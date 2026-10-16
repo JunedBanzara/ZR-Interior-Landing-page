@@ -1,4 +1,4 @@
-import { DB } from '../../server/db.js';
+import { DB } from '../db.js';
 
 export default async function handler(req, res) {
   // CORS Headers

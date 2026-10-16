@@ -1,18 +1,18 @@
-import createOrderHandler from '../api/razorpay/create-order.js';
-import verifyPaymentHandler from '../api/razorpay/verify-payment.js';
-import webhookHandler from '../api/razorpay/webhook.js';
-import calendlyWebhookHandler from '../api/calendly/webhook.js';
-import confirmAppointmentHandler from '../api/confirm-appointment.js';
-import bookingHandler from '../api/booking/[id].js';
-import statusHandler from '../api/status.js';
-import leadCaptureHandler from '../api/leads/capture.js';
-import reconcileAbandonedHandler from '../api/leads/reconcile-abandoned.js';
-import adminLoginHandler from '../api/admin/login.js';
-import adminLogoutHandler from '../api/admin/logout.js';
-import adminSessionHandler from '../api/admin/session.js';
-import adminLeadsHandler from '../api/admin/leads.js';
-import adminLeadActionHandler from '../api/admin/lead-action.js';
-import adminExportHandler from '../api/admin/export.js';
+import createOrderHandler from './routes/razorpay/create-order.js';
+import verifyPaymentHandler from './routes/razorpay/verify-payment.js';
+import webhookHandler from './routes/razorpay/webhook.js';
+import calendlyWebhookHandler from './routes/calendly/webhook.js';
+import confirmAppointmentHandler from './routes/confirm-appointment.js';
+import bookingHandler from './routes/booking.js';
+import statusHandler from './routes/status.js';
+import leadCaptureHandler from './routes/leads/capture.js';
+import reconcileAbandonedHandler from './routes/leads/reconcile-abandoned.js';
+import adminLoginHandler from './routes/admin/login.js';
+import adminLogoutHandler from './routes/admin/logout.js';
+import adminSessionHandler from './routes/admin/session.js';
+import adminLeadsHandler from './routes/admin/leads.js';
+import adminLeadActionHandler from './routes/admin/lead-action.js';
+import adminExportHandler from './routes/admin/export.js';
 
 export async function handleApiRequest(req, res) {
   // Ensure res has Vercel-like helper methods in Node/Vite middleware
@@ -33,7 +33,23 @@ export async function handleApiRequest(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  
+  // Robust pathname detection across Vercel rewrite, Node.js, and Vite middleware
+  let pathname = url.pathname;
+  const matchedPathQuery = url.searchParams.get('_path');
+  const matchedHeader = req.headers['x-matched-path'];
+
+  if (matchedPathQuery) {
+    pathname = matchedPathQuery.startsWith('/') ? `/api${matchedPathQuery}` : `/api/${matchedPathQuery}`;
+  } else if (matchedHeader && matchedHeader.startsWith('/api/')) {
+    pathname = matchedHeader.split('?')[0];
+  }
+
+  // Remove trailing slashes (except for exact '/')
+  if (pathname.length > 5 && pathname.endsWith('/')) {
+    pathname = pathname.replace(/\/+$/, '');
+  }
+
   const method = req.method;
 
   if (method === 'OPTIONS') {
@@ -41,19 +57,32 @@ export async function handleApiRequest(req, res) {
     return;
   }
 
+  // Parse query string into req.query
+  if (!req.query) {
+    req.query = Object.fromEntries(url.searchParams.entries());
+  } else {
+    for (const [k, v] of url.searchParams.entries()) {
+      if (k !== '_path' && !req.query[k]) {
+        req.query[k] = v;
+      }
+    }
+  }
+
   // Parse JSON Body for POST/PUT requests if not already parsed
   if (!req.body && (method === 'POST' || method === 'PUT')) {
     try {
-      req.body = await parseJsonBody(req);
+      const rawBody = await getRawRequestBody(req);
+      req.rawBody = rawBody;
+      req.body = rawBody ? JSON.parse(rawBody) : {};
     } catch (e) {
       res.status(400).json({ error: 'Invalid JSON request body' });
       return;
     }
-  }
-
-  // Parse query string into req.query
-  if (!req.query) {
-    req.query = Object.fromEntries(url.searchParams.entries());
+  } else if (typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try {
+      req.rawBody = req.body;
+      req.body = JSON.parse(req.body);
+    } catch (e) {}
   }
 
   try {
@@ -121,8 +150,8 @@ export async function handleApiRequest(req, res) {
 
     // 11. Booking Details
     if (pathname.startsWith('/api/booking/')) {
-      const id = pathname.replace('/api/booking/', '');
-      req.query = { id };
+      const id = pathname.replace('/api/booking/', '').replace(/^\/+/, '');
+      req.query = { ...req.query, id };
       return await bookingHandler(req, res);
     }
 
@@ -136,7 +165,7 @@ export async function handleApiRequest(req, res) {
   }
 }
 
-function parseJsonBody(req) {
+function getRawRequestBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', (chunk) => {
@@ -147,15 +176,7 @@ function parseJsonBody(req) {
       }
     });
     req.on('end', () => {
-      if (!body) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(body));
-      } catch (e) {
-        reject(e);
-      }
+      resolve(body);
     });
     req.on('error', (err) => reject(err));
   });
