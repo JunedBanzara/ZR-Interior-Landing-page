@@ -215,7 +215,7 @@ export class QualificationForm {
     if (!data) return;
 
     const submitBtn = this.form.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn ? submitBtn.innerHTML : 'BOOK MY CONSULTATION — ₹199';
+    const originalBtnText = submitBtn ? submitBtn.innerHTML : 'Submit Form';
 
     // Show inline saving status
     this.isSubmitting = true;

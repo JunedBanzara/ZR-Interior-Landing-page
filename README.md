@@ -17,7 +17,7 @@
 [![Calendly](https://img.shields.io/badge/Calendly-Scheduling-006BFF?style=for-the-badge&logo=calendly&logoColor=white)](https://calendly.com/)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Cloud_API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://business.whatsapp.com/)
 
-[**Explore Live Project**](https://zr-interior-design.vercel.app) • [**Book 45-Min Consultation**](#-4-step-consultation-funnel) • [**API Reference**](#-api-specification) • [**Setup Guide**](#-installation--local-setup)
+[**Explore Live Project**](https://zr-interior-landing-page.vercel.app/) • [**Book 45-Min Consultation**](#-4-step-consultation-funnel) • [**API Reference**](#-api-specification) • [**Setup Guide**](#-installation--local-setup)
 
 </div>
 
@@ -443,7 +443,7 @@ cp .env.example .env
 | :--- | :---: | :--- | :--- |
 | `PORT` | Optional | `3000` | Port for the local Node.js development server |
 | `NODE_ENV` | Optional | `development` | Set to `production` when deployed |
-| `APP_BASE_URL` | Yes (Prod) | `https://zr-interior-design.vercel.app` | Canonical domain for URLs and webhooks |
+| `APP_BASE_URL` | Yes (Prod) | `https://zr-interior-landing-page.vercel.app` | Canonical domain for URLs and webhooks |
 | `RAZORPAY_KEY_ID` | Yes | `rzp_test_...` / `rzp_live_...` | Razorpay API Key ID from Dashboard |
 | `RAZORPAY_KEY_SECRET` | Yes | `xxxxxxxxxxxxxxxx` | Razorpay Key Secret |
 | `RAZORPAY_WEBHOOK_SECRET` | Optional | `xxxxxxxxxxxxxxxx` | Secret configured in Razorpay Webhooks |

@@ -63,7 +63,7 @@ export const ZR_CONFIG = {
   },
 
   tracking: {
-    metaPixelId: "", // Set via .env or directly here
+    metaPixelId: "129698837673873",
     debugLogging: true
   }
 };

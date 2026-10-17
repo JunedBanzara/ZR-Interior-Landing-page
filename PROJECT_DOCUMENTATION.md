@@ -170,7 +170,7 @@ When running locally without Supabase credentials:
 # Application Port and Base URL
 PORT=3000
 NODE_ENV=development
-APP_BASE_URL=https://zr-interior-design.vercel.app
+APP_BASE_URL=https://zr-interior-landing-page.vercel.app
 
 # Razorpay Payment Gateway
 RAZORPAY_KEY_ID=rzp_live_YOUR_KEY
